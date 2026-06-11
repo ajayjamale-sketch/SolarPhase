@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation, useParams } from 'react-router-dom';
 import {
-  Zap, Sun, Leaf, DollarSign, Activity, Settings, Bell, X,
+  Zap, Sun, Moon, Leaf, DollarSign, Activity, Settings, Bell, X,
   LayoutDashboard, FolderOpen, CreditCard, Menu, LogOut, User,
   TrendingUp, AlertTriangle, CheckCircle, Wrench, BarChart2,
   Home, Building2, HardHat, Shield, BarChart3, ChevronRight,
@@ -229,7 +229,7 @@ export default function Dashboard() {
               </span>
             )}
             <button onClick={toggleTheme} className="p-2 rounded-lg hover:bg-muted transition-colors">
-              {theme === 'dark' ? <Sun className="w-5 h-5 text-primary" /> : <Zap className="w-5 h-5 text-muted-foreground" />}
+              {theme === 'dark' ? <Sun className="w-5 h-5 text-primary" /> : <Moon className="w-5 h-5 text-muted-foreground" />}
             </button>
             <button className="p-2 rounded-lg hover:bg-muted transition-colors relative">
               <Bell className="w-5 h-5" />
@@ -337,7 +337,7 @@ function DashboardSettings() {
         <div className="flex items-center justify-between py-4 border-b border-border">
           <div><p className="text-sm font-medium">Theme</p><p className="text-xs text-muted-foreground mt-0.5">Currently using {theme} mode</p></div>
           <button onClick={() => { toggleTheme(); toast.info(`Switched to ${theme === 'light' ? 'dark' : 'light'} mode.`); }} className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border hover:bg-muted transition-colors text-sm font-medium">
-            {isDark ? <Sun className="w-4 h-4 text-primary" /> : <Zap className="w-4 h-4" />} {isDark ? 'Light Mode' : 'Dark Mode'}
+            {isDark ? <Sun className="w-4 h-4 text-primary" /> : <Moon className="w-4 h-4" />} {isDark ? 'Light Mode' : 'Dark Mode'}
           </button>
         </div>
         <div className="flex items-center justify-between py-4">
@@ -361,7 +361,7 @@ function DashboardSettings() {
           { key: 'financingUpdates', label: 'Financing rate change notifications' },
           { key: 'newsletterUpdates', label: 'SolarPhase product updates newsletter' },
         ] as { key: keyof typeof notifications; label: string }[]).map(({ key, label }) => (
-          <div key={key} className="flex items-center justify-between py-3 border-b border-border last:border-0">
+          <div key={key as string} className="flex items-center justify-between py-3 border-b border-border last:border-0">
             <span className="text-sm">{label}</span>
             <button onClick={() => setNotifications(p => ({ ...p, [key]: !p[key] }))} className={`relative w-11 h-6 rounded-full transition-colors ${notifications[key] ? 'bg-primary' : 'bg-muted'}`}>
               <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${notifications[key] ? 'translate-x-5' : 'translate-x-0'}`} />
@@ -377,7 +377,7 @@ function DashboardSettings() {
           { key: 'shareAnonymousData', label: 'Share anonymous usage data to improve SolarPhase' },
           { key: 'showProfilePublicly', label: 'Show my profile in installer directory' },
         ] as { key: keyof typeof privacy; label: string }[]).map(({ key, label }) => (
-          <div key={key} className="flex items-center justify-between py-3 border-b border-border last:border-0">
+          <div key={key as string} className="flex items-center justify-between py-3 border-b border-border last:border-0">
             <span className="text-sm">{label}</span>
             <button onClick={() => setPrivacy(p => ({ ...p, [key]: !p[key] }))} className={`relative w-11 h-6 rounded-full transition-colors ${privacy[key] ? 'bg-primary' : 'bg-muted'}`}>
               <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${privacy[key] ? 'translate-x-5' : 'translate-x-0'}`} />

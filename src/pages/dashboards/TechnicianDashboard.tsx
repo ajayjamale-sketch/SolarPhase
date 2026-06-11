@@ -1,18 +1,28 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ClipboardList, Activity, CheckCircle, Shield, Upload, Download, Eye,
-  AlertCircle, Check, Wrench, FileText
+  AlertCircle, Check, Wrench, FileText, Sparkles, Search, ArrowRight
 } from 'lucide-react';
+import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { db, ServiceRequest } from '@/lib/dashboardStore';
 
 export default function TechnicianDashboard({ view }: { view: string }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   
   // Synced state
   const [tickets, setTickets] = useState<ServiceRequest[]>([]);
-  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<number | null>(() => {
+    try {
+      const stored = localStorage.getItem('solarphase_tech_selected_ticket_id');
+      return stored ? parseInt(stored) : null;
+    } catch {
+      return null;
+    }
+  });
 
   // Form states
   const [inspectForm, setInspectForm] = useState({ panelHealth: 85, inverterReading: '4.2', notes: '' });
@@ -20,37 +30,32 @@ export default function TechnicianDashboard({ view }: { view: string }) {
   const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    const fileName = files[0].name;
-    
-    // Simulate upload progress
-    setUploadProgress(0);
-    const interval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev === null) return 0;
-        if (prev >= 100) {
-          clearInterval(interval);
-          setUploadedFiles(prevFiles => [...prevFiles, fileName]);
-          toast.success(`File "${fileName}" uploaded successfully.`);
-          return null; // hide progress
-        }
-        return prev + 20;
-      });
-    }, 150);
+  // Warranty states
+  const [warrantySearch, setWarrantySearch] = useState('');
+  const [warrantyLookupCode, setWarrantyLookupCode] = useState('');
+  const [warrantyLookupResult, setWarrantyLookupResult] = useState<any | null>(null);
+
+  const warranties = [
+    { customer: 'Paul Turner', component: 'SunPower SPR-X22 Modules (24)', expiry: 'Dec 15, 2047', serial: 'PV-MOD-400W', status: 'Active' },
+    { customer: 'Lisa Monroe', component: 'SolarEdge SE7600H Inverter', expiry: 'Mar 22, 2037', serial: 'SOL-INV-7.6', status: 'Active' },
+    { customer: 'Tom Walsh', component: 'LG RESU10H Battery Storage', expiry: 'Aug 5, 2035', serial: 'BAT-RESU-10', status: 'Active' },
+    { customer: 'Jenny Liu', component: 'Enphase IQ8 Microinverters (20)', expiry: 'Feb 28, 2035', serial: 'SOL-MIC-IQ8', status: 'Expiring Soon' },
+  ];
+
+  const syncData = () => {
+    setTickets(db.getServiceRequests());
   };
 
   useEffect(() => {
-    // Load service requests
-    setTickets(db.getServiceRequests());
+    syncData();
   }, [view]);
 
   const activeTicket = tickets.find(t => t.id === selectedTicketId) || tickets.find(t => t.technician === user?.name && t.status === 'In Progress') || tickets[0];
 
   // Accept/Assign ticket to self
   const handleAcceptTicket = (id: number) => {
-    const updated = tickets.map(t => {
+    const allReqs = db.getServiceRequests();
+    const updated = allReqs.map(t => {
       if (t.id === id) {
         return {
           ...t,
@@ -64,7 +69,13 @@ export default function TechnicianDashboard({ view }: { view: string }) {
     db.saveServiceRequests(updated);
     setTickets(updated);
     setSelectedTicketId(id);
-    toast.success(`Service request ticket #${id} accepted. Maintenance checklist created.`);
+    localStorage.setItem('solarphase_tech_selected_ticket_id', id.toString());
+    toast.success(`Service request ticket #${id} accepted. Redirecting to inspect systems...`);
+    
+    // Guided redirect
+    setTimeout(() => {
+      navigate('/dashboard/inspect');
+    }, 500);
   };
 
   // Submit system inspection details
@@ -74,7 +85,8 @@ export default function TechnicianDashboard({ view }: { view: string }) {
       return;
     }
 
-    const updated = tickets.map(t => {
+    const allReqs = db.getServiceRequests();
+    const updated = allReqs.map(t => {
       if (t.id === activeTicket.id) {
         return {
           ...t,
@@ -91,14 +103,20 @@ export default function TechnicianDashboard({ view }: { view: string }) {
 
     db.saveServiceRequests(updated);
     setTickets(updated);
-    toast.success('Mechanical inspection telemetry uploaded.');
+    toast.success('Inspection telemetry uploaded! Redirecting to Perform Maintenance...');
+    
+    // Guided redirect
+    setTimeout(() => {
+      navigate('/dashboard/perform');
+    }, 500);
   };
 
   // Check checklist parameter
   const handleToggleChecklist = (itemIdx: number) => {
     if (!activeTicket || !activeTicket.maintenanceChecklist) return;
 
-    const updated = tickets.map(t => {
+    const allReqs = db.getServiceRequests();
+    const updated = allReqs.map(t => {
       if (t.id === activeTicket.id && t.maintenanceChecklist) {
         const list = [...t.maintenanceChecklist];
         list[itemIdx] = { ...list[itemIdx], done: !list[itemIdx].done };
@@ -115,7 +133,8 @@ export default function TechnicianDashboard({ view }: { view: string }) {
   const handleMarkCompleted = () => {
     if (!activeTicket) return;
 
-    const updated = tickets.map(t => {
+    const allReqs = db.getServiceRequests();
+    const updated = allReqs.map(t => {
       if (t.id === activeTicket.id) {
         return {
           ...t,
@@ -127,10 +146,36 @@ export default function TechnicianDashboard({ view }: { view: string }) {
 
     db.saveServiceRequests(updated);
     setTickets(updated);
-    toast.success(`Ticket #${activeTicket.id} marked as completed. System offline status cleared.`);
+    toast.success(`Ticket #${activeTicket.id} completed! Redirecting to Update Reports...`);
+    
+    // Guided redirect
+    setTimeout(() => {
+      navigate('/dashboard/reports');
+    }, 500);
   };
 
-  // Download PDF Report
+  // Simulated File Upload
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const fileName = files[0].name;
+    
+    setUploadProgress(0);
+    const interval = setInterval(() => {
+      setUploadProgress(prev => {
+        if (prev === null) return 0;
+        if (prev >= 100) {
+          clearInterval(interval);
+          setUploadedFiles(prevFiles => [...prevFiles, fileName]);
+          toast.success(`File "${fileName}" uploaded successfully.`);
+          return null; // hide progress
+        }
+        return prev + 20;
+      });
+    }, 150);
+  };
+
+  // Download Report File
   const handleGeneratePDF = () => {
     if (!activeTicket) {
       toast.error('No ticket selected.');
@@ -172,7 +217,42 @@ export default function TechnicianDashboard({ view }: { view: string }) {
     }, 800);
   };
 
+  const handleWarrantyLookupSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!warrantyLookupCode) return;
+    const match = warranties.find(w => w.serial.toLowerCase() === warrantyLookupCode.trim().toLowerCase());
+    if (match) {
+      setWarrantyLookupResult(match);
+      toast.success('Warranty details successfully queried.');
+    } else {
+      setWarrantyLookupResult({ error: `Serial number "${warrantyLookupCode}" not found in manufacturer index.` });
+      toast.error('Warranty search failed.');
+    }
+  };
+
   const myActiveTickets = tickets.filter(t => t.technician === user?.name && t.status === 'In Progress');
+
+  // Overview metrics datasets
+  const dispatchData = [
+    { name: 'Open Requests', count: tickets.filter(t => t.status === 'Open').length },
+    { name: 'In Progress', count: tickets.filter(t => t.status === 'In Progress').length },
+    { name: 'Completed', count: tickets.filter(t => t.status === 'Completed').length },
+  ];
+
+  const degradationData = [
+    { year: 'Yr 1', health: 100 },
+    { year: 'Yr 2', health: 98.2 },
+    { year: 'Yr 3', health: 96.9 },
+    { year: 'Yr 4', health: 95.1 },
+    { year: 'Yr 5', health: 93.8 },
+  ];
+
+  // Filters
+  const filteredWarranties = warranties.filter(w =>
+    w.customer.toLowerCase().includes(warrantySearch.toLowerCase()) ||
+    w.component.toLowerCase().includes(warrantySearch.toLowerCase()) ||
+    w.serial.toLowerCase().includes(warrantySearch.toLowerCase())
+  );
 
   // 1. VIEW: SERVICE REQUESTS
   if (view === 'requests') return (
@@ -189,17 +269,17 @@ export default function TechnicianDashboard({ view }: { view: string }) {
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <p className="font-bold text-sm text-foreground">{ticket.customer}</p>
-                  <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${ticket.priority === 'High' ? 'bg-destructive/10 text-destructive' : ticket.priority === 'Medium' ? 'bg-yellow-500/10 text-yellow-600' : 'bg-muted text-muted-foreground'}`}>
+                  <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${ticket.priority === 'High' ? 'bg-destructive/10 text-destructive border-destructive/20' : ticket.priority === 'Medium' ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20' : 'bg-muted text-muted-foreground'}`}>
                     {ticket.priority} Priority
                   </span>
                 </div>
                 <p className="text-xs font-semibold text-primary">{ticket.type} · {ticket.location}</p>
                 <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{ticket.notes}</p>
-                {ticket.technician && <p className="text-[10px] text-accent font-semibold">Assigned Tech: {ticket.technician}</p>}
+                {ticket.technician && <p className="text-[10px] text-accent font-semibold mt-1">Assigned Tech: {ticket.technician}</p>}
               </div>
 
               <div className="flex items-center gap-2 border-t sm:border-t-0 pt-3 sm:pt-0 justify-between sm:justify-end flex-shrink-0">
-                <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider ${ticket.status === 'Open' ? 'bg-secondary/10 text-secondary' : ticket.status === 'In Progress' ? 'bg-amber-500/10 text-amber-600' : 'bg-accent/10 text-accent'}`}>
+                <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider ${ticket.status === 'Open' ? 'bg-secondary/10 text-secondary' : ticket.status === 'In Progress' ? 'bg-amber-500/10 text-amber-600' : 'bg-accent/10 text-accent border border-accent/20'}`}>
                   {ticket.status}
                 </span>
 
@@ -214,8 +294,12 @@ export default function TechnicianDashboard({ view }: { view: string }) {
 
                 {ticket.status === 'In Progress' && ticket.technician === user?.name && (
                   <button
-                    onClick={() => setSelectedTicketId(ticket.id)}
-                    className="px-4 py-2 bg-muted border border-border hover:bg-muted/80 rounded-xl text-xs font-semibold flex items-center gap-1.5"
+                    onClick={() => {
+                      setSelectedTicketId(ticket.id);
+                      localStorage.setItem('solarphase_tech_selected_ticket_id', ticket.id.toString());
+                      navigate('/dashboard/inspect');
+                    }}
+                    className="px-4 py-2 bg-muted border border-border hover:bg-muted/80 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
                   >
                     <Eye className="w-3.5 h-3.5" /> Inspect
                   </button>
@@ -314,7 +398,7 @@ export default function TechnicianDashboard({ view }: { view: string }) {
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${task.done ? 'bg-accent border-accent' : 'border-border'}`}>
                   {task.done && <Check className="w-3 h-3 text-white" />}
                 </div>
-                <span className={`text-xs font-semibold ${task.done ? 'line-through text-muted-foreground' : ''}`}>{task.label}</span>
+                <span className={`text-xs font-semibold ${task.done ? 'line-through text-muted-foreground font-normal' : ''}`}>{task.label}</span>
               </button>
             ))}
           </div>
@@ -391,7 +475,7 @@ export default function TechnicianDashboard({ view }: { view: string }) {
                 {uploadedFiles.map((file, idx) => (
                   <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-muted/60 text-xs border border-border/50">
                     <span className="font-semibold truncate max-w-[200px]">{file}</span>
-                    <span className="text-[10px] text-accent font-semibold flex items-center gap-0.5"><Check className="w-3 h-3" /> Uploaded</span>
+                    <span className="text-[10px] text-accent font-semibold flex items-center gap-0.5"><Check className="w-3.5 h-3.5" /> Uploaded</span>
                   </div>
                 ))}
               </div>
@@ -411,30 +495,83 @@ export default function TechnicianDashboard({ view }: { view: string }) {
 
   // 5. VIEW: WARRANTY TRACKING
   if (view === 'warranty') return (
-    <div className="space-y-4 max-w-4xl">
-      <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-        <h2 className="font-bold text-lg mb-1">Contractor Warranty Index</h2>
-        <p className="text-xs text-muted-foreground">Monitor client equipment warranties in your coverage territory.</p>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="lg:col-span-2 space-y-4">
+        <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex items-center gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <input
+              type="text"
+              value={warrantySearch}
+              onChange={e => setWarrantySearch(e.target.value)}
+              placeholder="Search components or serials..."
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-muted border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {filteredWarranties.map((w, i) => (
+            <div key={i} className="bg-card border border-border rounded-2xl p-5 shadow-sm flex justify-between items-center gap-4">
+              <div>
+                <p className="font-bold text-sm text-foreground">{w.customer}</p>
+                <p className="text-xs font-semibold text-primary mt-0.5">{w.component}</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-[10px] bg-muted border border-border/80 px-2 py-0.5 rounded font-mono font-medium text-foreground">S/N: {w.serial}</span>
+                  <span className="text-[10px] text-muted-foreground">Expires: {w.expiry}</span>
+                </div>
+              </div>
+              <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${w.status === 'Active' ? 'bg-accent/10 text-accent border border-accent/20' : 'bg-yellow-500/10 text-yellow-600 border border-yellow-500/20'}`}>
+                {w.status}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
-      <div className="space-y-3">
-        {[
-          { customer: 'Paul Turner', component: 'SunPower SPR-X22 Modules (24)', expiry: 'Dec 15, 2047', daysLeft: 8221, status: 'Active' },
-          { customer: 'Lisa Monroe', component: 'SolarEdge SE7600H Inverter', expiry: 'Mar 22, 2037', daysLeft: 4302, status: 'Active' },
-          { customer: 'Tom Walsh', component: 'LG RESU10H Battery Storage', expiry: 'Aug 5, 2035', daysLeft: 3707, status: 'Active' },
-          { customer: 'Jenny Liu', component: 'Enphase IQ8 Microinverters (20)', expiry: 'Feb 28, 2035', daysLeft: 3548, status: 'Expiring Soon' },
-        ].map((w, i) => (
-          <div key={i} className="bg-card border border-border rounded-2xl p-5 shadow-sm flex justify-between items-center gap-4">
-            <div>
-              <p className="font-bold text-sm text-foreground">{w.customer}</p>
-              <p className="text-xs font-semibold text-primary mt-0.5">{w.component}</p>
-              <p className="text-[10px] text-muted-foreground mt-1.5">Expires: {w.expiry} ({w.daysLeft.toLocaleString()} days remaining)</p>
+      {/* Side Warranty Lookup Tool */}
+      <div className="space-y-4">
+        <div className="bg-card border border-border rounded-2xl p-6 shadow-sm space-y-4">
+          <h3 className="font-bold text-base flex items-center gap-1.5"><Shield className="w-5 h-5 text-primary" /> Warranty Lookup</h3>
+          <p className="text-xs text-muted-foreground">Query manufacturer servers directly using equipment serial markers.</p>
+          <form onSubmit={handleWarrantyLookupSubmit} className="space-y-3">
+            <input
+              type="text"
+              value={warrantyLookupCode}
+              onChange={e => setWarrantyLookupCode(e.target.value)}
+              placeholder="e.g. PV-MOD-400W"
+              required
+              className="w-full px-3 py-2 rounded-xl bg-muted border border-border text-xs focus:outline-none focus:ring-1 focus:ring-primary font-mono uppercase"
+            />
+            <button
+              type="submit"
+              className="w-full py-2 bg-primary text-primary-foreground font-semibold rounded-lg text-xs hover:bg-primary/95 transition-colors shadow-sm"
+            >
+              Verify Coverage
+            </button>
+          </form>
+
+          {warrantyLookupResult && (
+            <div className="mt-4 border-t border-border pt-4 text-xs">
+              {warrantyLookupResult.error ? (
+                <div className="flex gap-2 p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-xl items-start">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  <p className="font-medium text-[11px] leading-relaxed">{warrantyLookupResult.error}</p>
+                </div>
+              ) : (
+                <div className="bg-accent/5 border border-accent/20 rounded-xl p-3.5 space-y-2.5">
+                  <p className="font-bold text-accent text-[11px] uppercase tracking-wider">Manufacturer Record Found</p>
+                  <div className="space-y-1.5 text-[11px]">
+                    <div className="flex justify-between pb-1 border-b border-border/40"><span className="text-muted-foreground">Owner</span><span className="font-bold">{warrantyLookupResult.customer}</span></div>
+                    <div className="flex justify-between pb-1 border-b border-border/40"><span className="text-muted-foreground">Equipment</span><span className="font-semibold">{warrantyLookupResult.component}</span></div>
+                    <div className="flex justify-between pb-1 border-b border-border/40"><span className="text-muted-foreground">Status</span><span className="font-bold text-accent">{warrantyLookupResult.status}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Expiration</span><span className="font-semibold">{warrantyLookupResult.expiry}</span></div>
+                  </div>
+                </div>
+              )}
             </div>
-            <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${w.status === 'Active' ? 'bg-accent/10 text-accent border border-accent/20' : 'bg-yellow-500/10 text-yellow-600 border border-yellow-500/20'}`}>
-              {w.status}
-            </span>
-          </div>
-        ))}
+          )}
+        </div>
       </div>
     </div>
   );
@@ -442,6 +579,7 @@ export default function TechnicianDashboard({ view }: { view: string }) {
   // 6. DEFAULT VIEW: OVERVIEW
   return (
     <div className="space-y-6">
+      {/* Statistics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {[
           { label: 'Open Tickets', value: `${tickets.filter(t => t.status === 'Open').length}`, icon: ClipboardList, color: 'text-primary', bg: 'bg-primary/10' },
@@ -455,6 +593,86 @@ export default function TechnicianDashboard({ view }: { view: string }) {
             <p className="text-2xl font-black text-foreground">{s.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* Diagnostics charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1 bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <h3 className="font-semibold text-sm mb-4">Technician Dispatch Workload</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={dispatchData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+              <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 11 }} />
+              <Bar dataKey="count" fill="#2563EB" radius={[4, 4, 0, 0]} name="Ticket Count" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <h3 className="font-semibold text-sm mb-4">Standard Panel Health Degradation Profile</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <LineChart data={degradationData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="year" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+              <YAxis domain={[90, 100]} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickFormatter={v => `${v}%`} />
+              <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 11 }} />
+              <Line type="monotone" dataKey="health" stroke="#16A34A" strokeWidth={2.5} dot={{ r: 4, fill: '#16A34A' }} name="Health Index (%)" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Active Assignments Table */}
+      <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+        <h3 className="font-semibold text-sm mb-4">My In-Progress Service Tickets</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-border pb-2 text-muted-foreground font-semibold">
+                <th className="py-2">Ticket ID</th>
+                <th className="py-2">Customer</th>
+                <th className="py-2">Priority</th>
+                <th className="py-2">Operations Job</th>
+                <th className="py-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {myActiveTickets.map(t => (
+                <tr key={t.id} className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors">
+                  <td className="py-3 font-bold text-foreground"># {t.id}</td>
+                  <td className="py-3 text-muted-foreground">{t.customer}</td>
+                  <td className="py-3">
+                    <span className={`px-2 py-0.5 rounded font-bold border text-[9px] ${
+                      t.priority === 'High' ? 'bg-destructive/10 text-destructive border-destructive/20' : 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20'
+                    }`}>
+                      {t.priority}
+                    </span>
+                  </td>
+                  <td className="py-3 font-semibold text-primary">{t.type}</td>
+                  <td className="py-3 text-right">
+                    <button
+                      onClick={() => {
+                        setSelectedTicketId(t.id);
+                        localStorage.setItem('solarphase_tech_selected_ticket_id', t.id.toString());
+                        navigate('/dashboard/inspect');
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-primary text-primary-foreground rounded-lg text-[10px] font-bold hover:bg-primary/95 transition-colors shadow-sm"
+                    >
+                      Begin Inspection <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {myActiveTickets.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-6 text-center text-muted-foreground italic">No in-progress tickets assigned. Go to the Service Requests tab to accept dispatches.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

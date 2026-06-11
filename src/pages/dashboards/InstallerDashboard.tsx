@@ -95,12 +95,16 @@ export default function InstallerDashboard({ view }: { view: string }) {
   const handleUpdateProjectStage = (projId: number) => {
     const stages = ['Site Survey', 'Design', 'Permits', 'Installation', 'Commissioning', 'Active'] as const;
     const allProjects = db.getProjects();
+    const targetProj = allProjects.find(p => p.id === projId);
+    if (!targetProj) return;
+
+    const currentIdx = stages.indexOf(targetProj.status as any);
+    const nextIdx = Math.min(stages.length - 1, currentIdx + 1);
+    const nextStatus = stages[nextIdx];
+    const nextComp = Math.round(((nextIdx + 1) / stages.length) * 100);
+
     const updated = allProjects.map(p => {
       if (p.id === projId) {
-        const currentIdx = stages.indexOf(p.status as any);
-        const nextIdx = Math.min(stages.length - 1, currentIdx + 1);
-        const nextStatus = stages[nextIdx];
-        const nextComp = Math.round(((nextIdx + 1) / stages.length) * 100);
         return {
           ...p,
           status: nextStatus,
