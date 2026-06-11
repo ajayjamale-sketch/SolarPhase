@@ -17,6 +17,29 @@ export default function TechnicianDashboard({ view }: { view: string }) {
   // Form states
   const [inspectForm, setInspectForm] = useState({ panelHealth: 85, inverterReading: '4.2', notes: '' });
   const [reportNotes, setReportNotes] = useState('');
+  const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const fileName = files[0].name;
+    
+    // Simulate upload progress
+    setUploadProgress(0);
+    const interval = setInterval(() => {
+      setUploadProgress(prev => {
+        if (prev === null) return 0;
+        if (prev >= 100) {
+          clearInterval(interval);
+          setUploadedFiles(prevFiles => [...prevFiles, fileName]);
+          toast.success(`File "${fileName}" uploaded successfully.`);
+          return null; // hide progress
+        }
+        return prev + 20;
+      });
+    }, 150);
+  };
 
   useEffect(() => {
     // Load service requests
@@ -336,13 +359,43 @@ export default function TechnicianDashboard({ view }: { view: string }) {
 
           <div>
             <label className="block text-xs font-semibold mb-2">Upload Telemetry / Photo Attachments</label>
+            <input
+              type="file"
+              id="tech-file-upload"
+              className="hidden"
+              onChange={handleFileSelect}
+            />
             <div
-              onClick={() => toast.info('Photo upload simulation complete.')}
+              onClick={() => document.getElementById('tech-file-upload')?.click()}
               className="border-2 border-dashed border-border hover:border-primary/50 cursor-pointer rounded-2xl p-6 text-center transition-colors"
             >
               <Upload className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
               <p className="text-xs text-muted-foreground font-semibold">Click to attach photos or sensor dump files</p>
             </div>
+
+            {uploadProgress !== null && (
+              <div className="mt-3 space-y-1">
+                <div className="flex justify-between text-[10px] text-muted-foreground font-medium">
+                  <span>Uploading telemetry...</span>
+                  <span>{uploadProgress}%</span>
+                </div>
+                <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                  <div className="bg-primary h-1.5 rounded-full transition-all duration-150" style={{ width: `${uploadProgress}%` }} />
+                </div>
+              </div>
+            )}
+
+            {uploadedFiles.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                <p className="text-[10px] text-muted-foreground font-semibold uppercase">Attached Files ({uploadedFiles.length})</p>
+                {uploadedFiles.map((file, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-muted/60 text-xs border border-border/50">
+                    <span className="font-semibold truncate max-w-[200px]">{file}</span>
+                    <span className="text-[10px] text-accent font-semibold flex items-center gap-0.5"><Check className="w-3 h-3" /> Uploaded</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <button

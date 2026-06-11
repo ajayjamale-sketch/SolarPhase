@@ -285,16 +285,48 @@ function RoleDashboard({ role, view }: { role: UserRole; view: string }) {
 // ─── Inline Settings View ─────────────────────────────────────────────────────
 function DashboardSettings() {
   const { theme, toggleTheme, isDark } = useTheme();
-  const [notifications, setNotifications] = useState({
-    emailAlerts: true, productionReports: true, maintenanceReminders: true, financingUpdates: false, newsletterUpdates: false,
+  
+  const [notifications, setNotifications] = useState(() => {
+    try {
+      const stored = localStorage.getItem('solarphase_settings_notifications');
+      return stored ? JSON.parse(stored) : {
+        emailAlerts: true, productionReports: true, maintenanceReminders: true, financingUpdates: false, newsletterUpdates: false,
+      };
+    } catch {
+      return {
+        emailAlerts: true, productionReports: true, maintenanceReminders: true, financingUpdates: false, newsletterUpdates: false,
+      };
+    }
   });
-  const [privacy, setPrivacy] = useState({ shareAnonymousData: true, showProfilePublicly: false });
-  const [language, setLanguage] = useState('en');
+
+  const [privacy, setPrivacy] = useState(() => {
+    try {
+      const stored = localStorage.getItem('solarphase_settings_privacy');
+      return stored ? JSON.parse(stored) : { shareAnonymousData: true, showProfilePublicly: false };
+    } catch {
+      return { shareAnonymousData: true, showProfilePublicly: false };
+    }
+  });
+
+  const [language, setLanguage] = useState(() => {
+    return localStorage.getItem('solarphase_settings_language') || 'en';
+  });
+
   const [saving, setSaving] = useState(false);
 
   const handleSave = () => {
     setSaving(true);
-    setTimeout(() => { toast.success('Settings saved successfully.'); setSaving(false); }, 700);
+    try {
+      localStorage.setItem('solarphase_settings_notifications', JSON.stringify(notifications));
+      localStorage.setItem('solarphase_settings_privacy', JSON.stringify(privacy));
+      localStorage.setItem('solarphase_settings_language', language);
+    } catch (e) {
+      console.error('Failed to save settings to localStorage', e);
+    }
+    setTimeout(() => { 
+      toast.success('Settings saved successfully.'); 
+      setSaving(false); 
+    }, 700);
   };
 
   return (

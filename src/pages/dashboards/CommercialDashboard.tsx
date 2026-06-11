@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   BarChart3, DollarSign, TrendingUp, Leaf, Download, FolderOpen,
-  CreditCard, Cpu, CheckCircle, ChevronRight, X, Clock, HelpCircle, Check
+  CreditCard, Cpu, CheckCircle, ChevronRight, X, Clock, HelpCircle, Check,
+  Sparkles, Wrench, Shield, AlertTriangle, Activity
 } from 'lucide-react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Line } from 'recharts';
 import { useAuth } from '@/hooks/useAuth';
@@ -10,8 +12,9 @@ import { db, LoanApplication, Project, EnterpriseSite } from '@/lib/dashboardSto
 
 export default function CommercialDashboard({ view }: { view: string }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   
-  // Dynamic stores
+  // Dynamic synchronized stores
   const [activeLoan, setActiveLoan] = useState<LoanApplication | null>(null);
   const [activeProjects, setActiveProjects] = useState<Project[]>([]);
   const [sites, setSites] = useState<EnterpriseSite[]>([]);
@@ -20,23 +23,44 @@ export default function CommercialDashboard({ view }: { view: string }) {
   const [emiCalc, setEmiCalc] = useState({ amount: '150000', rate: '6.5', tenure: '10' });
   const [emiResult, setEmiResult] = useState<number | null>(null);
   const [selectedSite, setSelectedSite] = useState('HQ');
-  const [appliedRecos, setAppliedRecos] = useState<number[]>([]);
   const [showLoanModal, setShowLoanModal] = useState(false);
   const [loanForm, setLoanForm] = useState({ companyName: user?.company || 'My Company', creditScore: '740', amount: '150000' });
 
-  useEffect(() => {
-    // Sync active loan
+  // Persistence for applied load shift recommendations
+  const [appliedRecos, setAppliedRecos] = useState<number[]>(() => {
+    try {
+      const stored = localStorage.getItem('solarphase_applied_recos');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Persistence for commercial subsidies claim status
+  const [appliedSubsidies, setAppliedSubsidies] = useState<number[]>(() => {
+    try {
+      const stored = localStorage.getItem('solarphase_applied_subsidies');
+      return stored ? JSON.parse(stored) : [2]; // MACRS is applied by default
+    } catch {
+      return [2];
+    }
+  });
+
+  // Function to sync data from the localStorage DB
+  const syncData = () => {
     const loans = db.getLoanApplications();
-    const myLoan = loans.find(l => l.applicant === (user?.company || user?.name));
+    const myLoan = loans.find(l => l.applicant === (user?.company || user?.name || 'Commercial Business'));
     setActiveLoan(myLoan || null);
 
-    // Sync projects
     const allProjects = db.getProjects();
-    const myProjects = allProjects.filter(p => p.customer === (user?.company || user?.name));
+    const myProjects = allProjects.filter(p => p.customer === (user?.company || user?.name || 'Commercial Business'));
     setActiveProjects(myProjects);
 
-    // Sync enterprise sites
     setSites(db.getSites());
+  };
+
+  useEffect(() => {
+    syncData();
   }, [view, user?.company, user?.name]);
 
   const calcEMI = () => {
@@ -67,10 +91,10 @@ export default function CommercialDashboard({ view }: { view: string }) {
     setActiveLoan(app);
     setShowLoanModal(false);
     toast.success('Commercial solar financing application submitted to lenders.');
+    navigate('/dashboard/financing');
   };
 
   const handleInitiateProject = (siteName: string) => {
-    // First step in project onboarding for commercial
     toast.info(`Solar Potential assessment generated for ${siteName}. Applying for financing is recommended.`);
     setLoanForm(p => ({
       ...p,
@@ -79,9 +103,117 @@ export default function CommercialDashboard({ view }: { view: string }) {
     setShowLoanModal(true);
   };
 
+  const handleStartInstallation = (siteName: string) => {
+    if (!activeLoan || activeLoan.status !== 'Approved') {
+      toast.error('Financing must be approved to begin installation.');
+      return;
+    }
+
+    const proj = db.addProject({
+      name: `${siteName} Solar Installation`,
+      customer: user?.company || user?.name || 'Commercial Business',
+      status: 'Site Survey',
+      completion: 10,
+      date: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      checklist: [
+        { label: 'Structural roof survey & solar shading assessment', done: true },
+        { label: 'Electrical grid load analysis & utility interconnection filings', done: false },
+        { label: 'Permit application approvals', done: false },
+        { label: 'Racking, framing & heavy mount assembly', done: false },
+        { label: 'Solar module installation & inverter connection', done: false },
+        { label: 'Commissioning & local inspection clearance', done: false }
+      ]
+    });
+
+    syncData();
+    toast.success(`Contract signed! EPC installers dispatched for ${siteName} Solar Installation.`);
+  };
+
   const applyReco = (index: number) => {
-    setAppliedRecos(prev => [...prev, index]);
+    const updated = [...appliedRecos, index];
+    setAppliedRecos(updated);
+    localStorage.setItem('solarphase_applied_recos', JSON.stringify(updated));
+    
+    // Dynamically tag active optimization to the selected enterprise site database records
+    const allSites = db.getSites();
+    const siteObj = allSites.find(s => s.name.toLowerCase() === selectedSite.toLowerCase());
+    if (siteObj) {
+      const name = ['machinery_shift', 'hvac_night_cool', 'ev_fleet_solar', 'demand_response'][index];
+      if (!siteObj.appliedOptimizations) siteObj.appliedOptimizations = [];
+      if (!siteObj.appliedOptimizations.includes(name)) {
+        siteObj.appliedOptimizations.push(name);
+        db.saveSites(allSites);
+      }
+    }
     toast.success('Optimization setpoints updated. AI load controller has shifted scheduling.');
+  };
+
+  const handleFileClaim = (index: number, name: string) => {
+    if (appliedSubsidies.includes(index)) return;
+    const updated = [...appliedSubsidies, index];
+    setAppliedSubsidies(updated);
+    localStorage.setItem('solarphase_applied_subsidies', JSON.stringify(updated));
+    toast.info(`Filing subsidy claim for ${name}...`);
+    
+    // Simulate verification after 1.5 seconds
+    setTimeout(() => {
+      toast.success(`Subsidy claim for ${name} has been verified and processed!`);
+    }, 1500);
+  };
+
+  // Simulation Helpers
+  const simulateLoanApproval = () => {
+    const allLoans = db.getLoanApplications();
+    const updated = allLoans.map(l => l.applicant === (user?.company || user?.name || 'Commercial Business') ? { ...l, status: 'Approved' as const } : l);
+    db.saveLoanApplications(updated);
+    syncData();
+    toast.success('Simulation: Financing Partner approved your commercial solar loan application!');
+  };
+
+  const simulateProjectAdvance = (projectId: number) => {
+    const allProjects = db.getProjects();
+    const stages = ['Site Survey', 'Design', 'Permits', 'Installation', 'Commissioning', 'Active'] as const;
+    
+    const updated = allProjects.map(p => {
+      if (p.id === projectId) {
+        const currentIdx = stages.indexOf(p.status as any);
+        const nextIdx = Math.min(stages.length - 1, currentIdx + 1);
+        const nextStatus = stages[nextIdx];
+        const nextComp = Math.round(((nextIdx + 1) / stages.length) * 100);
+        
+        // If it becomes Active, activate/add it as an enterprise site
+        if (nextStatus === 'Active') {
+          const siteName = p.name.split(' ')[0] || 'HQ';
+          const allSites = db.getSites();
+          const existingSite = allSites.find(s => s.name.toLowerCase() === siteName.toLowerCase());
+          if (existingSite) {
+            existingSite.status = 'Online';
+            // Increase generation capability to show it is active
+            existingSite.generation = siteName === 'HQ' ? 142 : siteName === 'Warehouse' ? 220 : 180;
+            db.saveSites(allSites);
+          } else {
+            db.addSite({
+              name: siteName,
+              generation: siteName === 'HQ' ? 142 : siteName === 'Warehouse' ? 220 : 180,
+              consumption: siteName === 'HQ' ? 120 : siteName === 'Warehouse' ? 190 : 150,
+              co2: siteName === 'HQ' ? 64 : siteName === 'Warehouse' ? 100 : 80,
+            });
+          }
+        }
+
+        return {
+          ...p,
+          status: nextStatus,
+          completion: nextStatus === 'Active' ? 100 : nextComp,
+          checklist: p.checklist?.map((item, idx) => idx <= nextIdx ? { ...item, done: true } : item)
+        };
+      }
+      return p;
+    });
+
+    db.saveProjects(updated);
+    syncData();
+    toast.success('Simulation: EPC installation progress advanced!');
   };
 
   const exportCSV = () => {
@@ -99,24 +231,53 @@ export default function CommercialDashboard({ view }: { view: string }) {
     }, 800);
   };
 
+  // Dynamic calculations based on active optimizations and active sites
+  // If recommendations are applied, consumption decreases and savings increase
+  const optConsumption = 18420 - (appliedRecos.includes(1) ? 920 : 0) - (appliedRecos.includes(3) ? 1450 : 0);
+  const optPeakDemand = 156 - (appliedRecos.includes(0) ? 22 : 0) - (appliedRecos.includes(3) ? 28 : 0);
+  const optCoverage = Math.min(95, 62 + (appliedRecos.includes(0) ? 6 : 0) + (appliedRecos.includes(2) ? 4 : 0) + (appliedRecos.includes(3) ? 5 : 0));
+  
+  let savingsBonus = 0;
+  if (appliedRecos.includes(0)) savingsBonus += 450;
+  if (appliedRecos.includes(1)) savingsBonus += 220;
+  if (appliedRecos.includes(2)) savingsBonus += 310;
+  if (appliedRecos.includes(3)) savingsBonus += 580;
+  const optSavings = 2482 + savingsBonus;
+  
+  const optCO2 = Math.round((18.4 + (optCoverage - 62) * 0.15) * 10) / 10;
+  const optGridBalance = Math.round(optConsumption * (1 - optCoverage / 100));
+
+  // If a site is currently undergoing project construction, show its status in the chart as offline (generation 0)
+  const displayedSites = sites.map(s => {
+    const proj = activeProjects.find(p => p.name.startsWith(s.name));
+    if (proj && proj.status !== 'Active') {
+      return {
+        ...s,
+        status: 'Offline' as const,
+        generation: 0
+      };
+    }
+    return s;
+  });
+
   // Mock graphs data
   const usageHourData = [
     { hour: '6am', usage: 42, solar: 10 },
-    { hour: '9am', usage: 87, solar: 65 },
-    { hour: '12pm', usage: 134, solar: 140 },
-    { hour: '3pm', usage: 156, solar: 110 },
-    { hour: '6pm', usage: 98, solar: 35 },
+    { hour: '9am', usage: 87 - (appliedRecos.includes(0) ? 10 : 0), solar: 65 },
+    { hour: '12pm', usage: 134 + (appliedRecos.includes(0) ? 25 : 0), solar: 140 },
+    { hour: '3pm', usage: 156 - (appliedRecos.includes(1) ? 15 : 0), solar: 110 },
+    { hour: '6pm', usage: 98 - (appliedRecos.includes(3) ? 20 : 0), solar: 35 },
     { hour: '9pm', usage: 54, solar: 0 },
   ];
 
   const roiProjectionData = [
-    { year: 'Year 1', savings: 14500, investment: 150000 },
-    { year: 'Year 2', savings: 32000, investment: 150000 },
-    { year: 'Year 3', savings: 54000, investment: 150000 },
-    { year: 'Year 4', savings: 78000, investment: 150000 },
-    { year: 'Year 5', savings: 106000, investment: 150000 },
-    { year: 'Year 6', savings: 138000, investment: 150000 },
-    { year: 'Year 7', savings: 172000, investment: 150000 },
+    { year: 'Year 1', savings: optSavings * 6, investment: 150000 },
+    { year: 'Year 2', savings: optSavings * 13, investment: 150000 },
+    { year: 'Year 3', savings: optSavings * 22, investment: 150000 },
+    { year: 'Year 4', savings: optSavings * 32, investment: 150000 },
+    { year: 'Year 5', savings: optSavings * 43, investment: 150000 },
+    { year: 'Year 6', savings: optSavings * 56, investment: 150000 },
+    { year: 'Year 7', savings: optSavings * 70, investment: 150000 },
   ];
 
   const siteDataMap = {
@@ -126,6 +287,7 @@ export default function CommercialDashboard({ view }: { view: string }) {
   };
 
   const selectedSiteDetails = siteDataMap[selectedSite as keyof typeof siteDataMap] || siteDataMap.HQ;
+  const siteProject = activeProjects.find(p => p.name === `${selectedSite} Solar Installation`);
 
   // 1. VIEW: ENERGY USAGE
   if (view === 'usage') return (
@@ -146,10 +308,10 @@ export default function CommercialDashboard({ view }: { view: string }) {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
           {[
-            { label: 'Monthly Power Input', value: '18,420 kWh', color: 'text-primary' },
-            { label: 'Facility Peak Demand', value: '156 kW', color: 'text-destructive' },
-            { label: 'Solar Supply Coverage', value: '62.4%', color: 'text-accent' },
-            { label: 'Imported Grid Balance', value: '6,920 kWh', color: 'text-secondary' },
+            { label: 'Monthly Power Input', value: `${optConsumption.toLocaleString()} kWh`, color: 'text-primary' },
+            { label: 'Facility Peak Demand', value: `${optPeakDemand} kW`, color: 'text-destructive' },
+            { label: 'Solar Supply Coverage', value: `${optCoverage.toFixed(1)}%`, color: 'text-accent' },
+            { label: 'Imported Grid Balance', value: `${optGridBalance.toLocaleString()} kWh`, color: 'text-secondary' },
           ].map((s, i) => (
             <div key={i} className="bg-muted/50 border border-border/40 rounded-xl p-4 text-center">
               <p className="text-xs text-muted-foreground font-medium mb-1">{s.label}</p>
@@ -193,7 +355,7 @@ export default function CommercialDashboard({ view }: { view: string }) {
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4 mb-6">
           {[
             { label: 'Usable Rooftop Area', value: selectedSiteDetails.roof },
             { label: 'Simulated Solar Capacity', value: selectedSiteDetails.capacity },
@@ -207,19 +369,111 @@ export default function CommercialDashboard({ view }: { view: string }) {
           ))}
         </div>
 
-        <div className="mt-6 border-t border-border pt-5 flex items-center justify-between">
+        {/* Dynamic Project Status & Action Section */}
+        <div className="border-t border-border pt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <span className="text-xs text-muted-foreground block">Project Status</span>
-            <span className="text-xs font-semibold text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full mt-1 inline-block border border-amber-500/20">Planning Stage</span>
+            {siteProject ? (
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full mt-1 inline-block border ${
+                siteProject.status === 'Active' ? 'text-accent bg-accent/10 border-accent/20' : 'text-amber-500 bg-amber-500/10 border-amber-500/20'
+              }`}>
+                {siteProject.status === 'Active' ? 'Operational / Connected' : `${siteProject.status} Phase (${siteProject.completion}%)`}
+              </span>
+            ) : activeLoan ? (
+              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full mt-1 inline-block border ${
+                activeLoan.status === 'Approved' ? 'text-accent bg-accent/10 border-accent/20' : 'text-yellow-500 bg-yellow-500/10 border-yellow-500/20'
+              }`}>
+                {activeLoan.status === 'Approved' ? 'Financing Secured' : 'Financing Reviewing'}
+              </span>
+            ) : (
+              <span className="text-xs font-semibold text-muted-foreground bg-muted border border-border px-2 py-0.5 rounded-full mt-1 inline-block">
+                Feasibility Assessment
+              </span>
+            )}
           </div>
-          <button
-            onClick={() => handleInitiateProject(selectedSite)}
-            className="px-6 py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 text-sm shadow-md"
-          >
-            Initiate Project for {selectedSite}
-          </button>
+
+          <div className="flex flex-col items-end gap-2">
+            {!siteProject && !activeLoan && (
+              <button
+                onClick={() => handleInitiateProject(selectedSite)}
+                className="px-6 py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 text-sm shadow-md transition-colors"
+              >
+                Initiate Project for {selectedSite}
+              </button>
+            )}
+
+            {!siteProject && activeLoan && activeLoan.status === 'Pending' && (
+              <div className="flex flex-col items-end gap-2">
+                <button
+                  disabled
+                  className="px-6 py-2.5 bg-muted text-muted-foreground font-semibold rounded-xl text-sm border border-border"
+                >
+                  Financing Under Review
+                </button>
+                <button
+                  onClick={simulateLoanApproval}
+                  className="flex items-center gap-1 text-xs text-primary hover:underline font-semibold"
+                >
+                  <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Loan Approval (Demo)
+                </button>
+              </div>
+            )}
+
+            {!siteProject && activeLoan && activeLoan.status === 'Approved' && (
+              <button
+                onClick={() => handleStartInstallation(selectedSite)}
+                className="px-6 py-2.5 bg-accent text-white font-semibold rounded-xl hover:bg-accent/90 text-sm shadow-md transition-colors"
+              >
+                Sign Contract & Dispatch Installer
+              </button>
+            )}
+
+            {siteProject && siteProject.status !== 'Active' && (
+              <button
+                onClick={() => simulateProjectAdvance(siteProject.id)}
+                className="flex items-center gap-1.5 px-4 py-2.5 bg-primary/10 text-primary border border-primary/20 font-semibold rounded-xl hover:bg-primary/20 transition-colors text-xs shadow-sm"
+              >
+                <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Construction Progress (Demo)
+              </button>
+            )}
+
+            {siteProject && siteProject.status === 'Active' && (
+              <div className="flex items-center gap-1.5 text-accent text-sm font-semibold">
+                <CheckCircle className="w-5 h-5 text-accent" /> System Commissioned
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Checklist section for in-progress project */}
+      {siteProject && (
+        <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="font-bold text-base">{siteProject.name}</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Commercial EPC Delivery Timeline · Dispatch Phase</p>
+            </div>
+            <span className="text-sm font-black text-primary">{siteProject.completion}% Done</span>
+          </div>
+          <div className="w-full bg-muted rounded-full h-3 mb-6 overflow-hidden">
+            <div className="bg-primary h-3 rounded-full transition-all duration-700" style={{ width: `${siteProject.completion}%` }} />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {siteProject.checklist?.map((step, i) => (
+              <div
+                key={i}
+                className={`flex items-center gap-3 p-4 rounded-xl border transition-all text-left ${step.done ? 'border-accent/30 bg-accent/5' : 'border-border'}`}
+              >
+                <div className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${step.done ? 'bg-accent border-accent' : 'border-border'}`}>
+                  {step.done && <Check className="w-3 h-3 text-white" />}
+                </div>
+                <span className={`font-semibold text-xs ${step.done ? 'line-through text-muted-foreground font-normal' : 'text-foreground'}`}>{step.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -284,24 +538,31 @@ export default function CommercialDashboard({ view }: { view: string }) {
           <h3 className="font-bold text-base mb-4">Eligible Commercial Subsidies</h3>
           <div className="space-y-3">
             {[
-              { name: 'Federal Investment Tax Credit (ITC)', amount: '30% of system cost', desc: 'Direct credit towards corporate income taxes.', applied: false },
-              { name: 'USDA REAP Federal Grant', amount: 'Up to 40% of total project cost', desc: 'Available for rural enterprises and agriculture.', applied: false },
-              { name: 'MACRS Depreciation Credit', amount: '5-year accelerated depreciation asset mapping', desc: 'Tax write-off for industrial capital equipment.', applied: true },
-            ].map((sub, i) => (
-              <div key={i} className="flex justify-between items-start gap-4 p-4 rounded-xl bg-muted/50 border border-border/50 text-xs">
-                <div>
-                  <p className="font-bold text-foreground">{sub.name}</p>
-                  <p className="text-[10px] font-semibold text-accent mt-0.5">{sub.amount}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">{sub.desc}</p>
+              { name: 'Federal Investment Tax Credit (ITC)', amount: '30% of system cost', desc: 'Direct credit towards corporate income taxes.' },
+              { name: 'USDA REAP Federal Grant', amount: 'Up to 40% of total project cost', desc: 'Available for rural enterprises and agriculture.' },
+              { name: 'MACRS Depreciation Credit', amount: '5-year accelerated depreciation asset mapping', desc: 'Tax write-off for industrial capital equipment.' },
+            ].map((sub, i) => {
+              const applied = appliedSubsidies.includes(i);
+              return (
+                <div key={i} className="flex justify-between items-start gap-4 p-4 rounded-xl bg-muted/50 border border-border/50 text-xs">
+                  <div>
+                    <p className="font-bold text-foreground">{sub.name}</p>
+                    <p className="text-[10px] font-semibold text-accent mt-0.5">{sub.amount}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">{sub.desc}</p>
+                  </div>
+                  <button
+                    onClick={() => handleFileClaim(i, sub.name)}
+                    className={`px-3 py-1.5 rounded-lg font-semibold transition-colors flex-shrink-0 ${
+                      applied 
+                        ? 'bg-accent/10 text-accent cursor-default border border-accent/20' 
+                        : 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm'
+                    }`}
+                  >
+                    {applied ? 'Claim Verified' : 'File Claim'}
+                  </button>
                 </div>
-                <button
-                  onClick={() => toast.success(`Subsidy claim submitted under MACRS / EPA guidelines.`)}
-                  className={`px-3 py-1.5 rounded-lg font-semibold transition-colors flex-shrink-0 ${sub.applied ? 'bg-accent/10 text-accent cursor-default' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`}
-                >
-                  {sub.applied ? 'Claim Verified' : 'File Claim'}
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
@@ -319,7 +580,7 @@ export default function CommercialDashboard({ view }: { view: string }) {
               </div>
               <button
                 onClick={() => setShowLoanModal(true)}
-                className="w-full py-2 bg-primary text-primary-foreground font-semibold rounded-lg text-xs hover:bg-primary/95 shadow-sm"
+                className="w-full py-2 bg-primary text-primary-foreground font-semibold rounded-lg text-xs hover:bg-primary/95 shadow-sm transition-colors"
               >
                 Apply for Commercial Loan
               </button>
@@ -327,29 +588,40 @@ export default function CommercialDashboard({ view }: { view: string }) {
           )}
 
           {activeLoan && (
-            <div className="space-y-3 border border-border bg-muted/40 p-4 rounded-xl text-xs">
-              <div className="flex justify-between border-b border-border pb-2">
-                <span className="text-muted-foreground">Borrower</span>
-                <span className="font-semibold">{activeLoan.applicant}</span>
+            <div className="space-y-3">
+              <div className="border border-border bg-muted/40 p-4 rounded-xl text-xs space-y-3">
+                <div className="flex justify-between border-b border-border pb-2">
+                  <span className="text-muted-foreground">Borrower</span>
+                  <span className="font-semibold">{activeLoan.applicant}</span>
+                </div>
+                <div className="flex justify-between border-b border-border pb-2">
+                  <span className="text-muted-foreground">Requested Capital</span>
+                  <span className="font-bold text-primary">${activeLoan.amount.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between border-b border-border pb-2">
+                  <span className="text-muted-foreground">System Size</span>
+                  <span className="font-semibold">{activeLoan.systemSize}</span>
+                </div>
+                <div className="flex justify-between border-b border-border pb-2">
+                  <span className="text-muted-foreground">Credit Class</span>
+                  <span className="font-semibold">FICO {activeLoan.creditScore}</span>
+                </div>
+                <div className="flex justify-between items-center pt-1">
+                  <span className="text-muted-foreground font-medium">Status</span>
+                  <span className={`px-2 py-0.5 rounded font-bold uppercase tracking-wider text-[9px] ${activeLoan.status === 'Approved' ? 'bg-accent/10 text-accent border border-accent/25' : activeLoan.status === 'Pending' ? 'bg-yellow-500/10 text-yellow-600 border border-yellow-500/20' : 'bg-destructive/10 text-destructive'}`}>
+                    {activeLoan.status}
+                  </span>
+                </div>
               </div>
-              <div className="flex justify-between border-b border-border pb-2">
-                <span className="text-muted-foreground">Requested Capital</span>
-                <span className="font-bold text-primary">${activeLoan.amount.toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between border-b border-border pb-2">
-                <span className="text-muted-foreground">System Size</span>
-                <span className="font-semibold">{activeLoan.systemSize}</span>
-              </div>
-              <div className="flex justify-between border-b border-border pb-2">
-                <span className="text-muted-foreground">Credit Class</span>
-                <span className="font-semibold">FICO {activeLoan.creditScore}</span>
-              </div>
-              <div className="flex justify-between items-center pt-1">
-                <span className="text-muted-foreground font-medium">Status</span>
-                <span className={`px-2 py-0.5 rounded font-bold uppercase tracking-wider text-[9px] ${activeLoan.status === 'Approved' ? 'bg-accent/10 text-accent' : activeLoan.status === 'Pending' ? 'bg-yellow-500/10 text-yellow-600' : 'bg-destructive/10 text-destructive'}`}>
-                  {activeLoan.status}
-                </span>
-              </div>
+
+              {activeLoan.status === 'Pending' && (
+                <button
+                  onClick={simulateLoanApproval}
+                  className="w-full flex items-center justify-center gap-1 py-2 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 rounded-lg text-xs font-semibold transition-colors"
+                >
+                  <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Loan Approval (Demo)
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -383,7 +655,7 @@ export default function CommercialDashboard({ view }: { view: string }) {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold text-muted-foreground mb-1">Corporate Credit Rating (e.g. Dun & Bradstreet / FICO Equivalent)</label>
+                <label className="block text-xs font-semibold text-muted-foreground mb-1">Corporate Credit Rating (Dun & Bradstreet FICO Equivalent)</label>
                 <input
                   type="number"
                   value={loanForm.creditScore}
@@ -393,7 +665,7 @@ export default function CommercialDashboard({ view }: { view: string }) {
               </div>
               <button
                 onClick={handleApplyLoan}
-                className="w-full py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 text-sm shadow-md"
+                className="w-full py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 text-sm shadow-md transition-colors"
               >
                 Submit Loan File
               </button>
@@ -411,7 +683,7 @@ export default function CommercialDashboard({ view }: { view: string }) {
         {[
           { label: 'Payback Period', value: '6.4 years', color: 'text-primary', desc: 'Payback trajectory threshold' },
           { label: 'Internal Rate of Return (IRR)', value: '18.3%', color: 'text-accent', desc: 'Yield over 25 year lifetime' },
-          { label: 'NPV Mitigation Asset', value: '$387,000', color: 'text-secondary', desc: 'Net Present Value savings' },
+          { label: 'NPV Mitigation Asset', value: `$${(387000 + savingsBonus * 50).toLocaleString()}`, color: 'text-secondary', desc: 'Net Present Value savings' },
         ].map((s, i) => (
           <div key={i} className="bg-card border border-border rounded-2xl p-6 text-center shadow-sm">
             <p className="text-xs text-muted-foreground font-medium mb-1">{s.label}</p>
@@ -488,10 +760,10 @@ export default function CommercialDashboard({ view }: { view: string }) {
     <div className="space-y-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {[
-          { label: 'Power Consumption', value: '18,420 kWh', sub: 'HQ + Warehouse + Factory', icon: BarChart3, color: 'text-primary', bg: 'bg-primary/10' },
-          { label: 'Energy Savings', value: '$2,482', sub: 'This billing cycle', icon: DollarSign, color: 'text-accent', bg: 'bg-accent/10' },
-          { label: 'Rooftop Offset Ratio', value: '62%', sub: 'Self-consumption share', icon: TrendingUp, color: 'text-secondary', bg: 'bg-secondary/10' },
-          { label: 'CO2 Mitigated', value: '18.4 tons', sub: 'Equivalent to 846 trees', icon: Leaf, color: 'text-accent', bg: 'bg-accent/10' },
+          { label: 'Power Consumption', value: `${optConsumption.toLocaleString()} kWh`, sub: 'HQ + Warehouse + Factory', icon: BarChart3, color: 'text-primary', bg: 'bg-primary/10' },
+          { label: 'Energy Savings', value: `$${optSavings.toLocaleString()}`, sub: 'This billing cycle', icon: DollarSign, color: 'text-accent', bg: 'bg-accent/10' },
+          { label: 'Rooftop Offset Ratio', value: `${optCoverage.toFixed(0)}%`, sub: 'Self-consumption share', icon: TrendingUp, color: 'text-secondary', bg: 'bg-secondary/10' },
+          { label: 'CO2 Mitigated', value: `${optCO2} tons`, sub: 'Equivalent to 846 trees', icon: Leaf, color: 'text-accent', bg: 'bg-accent/10' },
         ].map((s, i) => (
           <div key={i} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
             <div className={`w-10 h-10 rounded-xl ${s.bg} flex items-center justify-center mb-4`}><s.icon className={`w-5 h-5 ${s.color}`} /></div>
@@ -505,7 +777,7 @@ export default function CommercialDashboard({ view }: { view: string }) {
       <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
         <h3 className="font-semibold mb-5">Sub-site Yield vs Consumption (Monthly Aggregated)</h3>
         <ResponsiveContainer width="100%" height={230}>
-          <BarChart data={sites}>
+          <BarChart data={displayedSites}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
             <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />

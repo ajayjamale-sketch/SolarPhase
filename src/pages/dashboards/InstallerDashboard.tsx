@@ -1,14 +1,18 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Users, FolderOpen, CheckCircle, DollarSign, Building2, Wrench, HardHat,
-  ThumbsUp, ThumbsDown, RefreshCw, Check, Clock, Upload, ArrowRight, Eye
+  ThumbsUp, ThumbsDown, RefreshCw, Check, Clock, Upload, ArrowRight, Eye,
+  Sparkles
 } from 'lucide-react';
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { db, Lead, Project, ServiceRequest } from '@/lib/dashboardStore';
 
 export default function InstallerDashboard({ view }: { view: string }) {
   const { user, updateUser } = useAuth();
+  const navigate = useNavigate();
 
   // Shared synchronized states
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -22,13 +26,24 @@ export default function InstallerDashboard({ view }: { view: string }) {
     area: 'Greater Bay Area, CA'
   });
   const [bidPrices, setBidPrices] = useState<Record<number, string>>({});
-  const [activeProjectId, setActiveProjectId] = useState<number | null>(null);
+  const [activeProjectId, setActiveProjectId] = useState<number | null>(() => {
+    try {
+      const stored = localStorage.getItem('solarphase_installer_active_project_id');
+      return stored ? parseInt(stored) : null;
+    } catch {
+      return null;
+    }
+  });
 
-  useEffect(() => {
-    // Load leads, projects, maintenance
+  // Database Sync Helper
+  const syncData = () => {
     setLeads(db.getLeads());
     setProjects(db.getProjects());
     setMaintenanceTickets(db.getServiceRequests());
+  };
+
+  useEffect(() => {
+    syncData();
   }, [view]);
 
   // Save profile credentials
@@ -45,7 +60,8 @@ export default function InstallerDashboard({ view }: { view: string }) {
       return;
     }
 
-    const updatedLeads = leads.map(l => {
+    const allLeads = db.getLeads();
+    const updatedLeads = allLeads.map(l => {
       if (l.id === leadId) {
         return { ...l, status: 'Accepted' as const, quotePrice: priceStr };
       }
@@ -53,13 +69,17 @@ export default function InstallerDashboard({ view }: { view: string }) {
     });
 
     db.saveLeads(updatedLeads);
-    setLeads(updatedLeads);
+    setLeads(updatedLeads.filter(l => l.status === 'Pending' || l.status === 'Accepted'));
     toast.success(`Bid submitted: $${parseInt(priceStr).toLocaleString()} sent to customer!`);
+    
+    // Auto sync dashboard state
+    syncData();
   };
 
   // Decline lead
   const handleDeclineLead = (leadId: number) => {
-    const updatedLeads = leads.map(l => {
+    const allLeads = db.getLeads();
+    const updatedLeads = allLeads.map(l => {
       if (l.id === leadId) {
         return { ...l, status: 'Declined' as const };
       }
@@ -68,12 +88,14 @@ export default function InstallerDashboard({ view }: { view: string }) {
     db.saveLeads(updatedLeads);
     setLeads(updatedLeads);
     toast.info('Lead proposal declined.');
+    syncData();
   };
 
   // Increment project status
   const handleUpdateProjectStage = (projId: number) => {
     const stages = ['Site Survey', 'Design', 'Permits', 'Installation', 'Commissioning', 'Active'] as const;
-    const updated = projects.map(p => {
+    const allProjects = db.getProjects();
+    const updated = allProjects.map(p => {
       if (p.id === projId) {
         const currentIdx = stages.indexOf(p.status as any);
         const nextIdx = Math.min(stages.length - 1, currentIdx + 1);
@@ -82,7 +104,8 @@ export default function InstallerDashboard({ view }: { view: string }) {
         return {
           ...p,
           status: nextStatus,
-          completion: nextStatus === 'Active' ? 100 : nextComp
+          completion: nextStatus === 'Active' ? 100 : nextComp,
+          checklist: p.checklist?.map((item, idx) => idx <= nextIdx ? { ...item, done: true } : item)
         };
       }
       return p;
@@ -90,12 +113,13 @@ export default function InstallerDashboard({ view }: { view: string }) {
 
     db.saveProjects(updated);
     setProjects(updated);
-    toast.success('Project implementation stage advanced.');
+    toast.success(`Project stage advanced to "${nextStatus}".`);
   };
 
   // Toggle checklist checkbox
   const handleToggleChecklist = (projId: number, itemIdx: number) => {
-    const updated = projects.map(p => {
+    const allProjects = db.getProjects();
+    const updated = allProjects.map(p => {
       if (p.id === projId && p.checklist) {
         const list = [...p.checklist];
         list[itemIdx] = { ...list[itemIdx], done: !list[itemIdx].done };
@@ -120,7 +144,8 @@ export default function InstallerDashboard({ view }: { view: string }) {
   // Assign Technician to Maintenance request
   const handleAssignTechnician = (ticketId: number, techName: string) => {
     if (!techName) return;
-    const updated = maintenanceTickets.map(t => {
+    const allReqs = db.getServiceRequests();
+    const updated = allReqs.map(t => {
       if (t.id === ticketId) {
         return {
           ...t,
@@ -134,9 +159,81 @@ export default function InstallerDashboard({ view }: { view: string }) {
     db.saveServiceRequests(updated);
     setMaintenanceTickets(updated);
     toast.success(`Technician ${techName} assigned to service call ticket #${ticketId}.`);
+    syncData();
   };
 
-  const selectedProject = projects.find(p => p.id === activeProjectId) || projects[0];
+  // Direct redirection to installation checklist
+  const handleLoadChecklist = (projId: number) => {
+    setActiveProjectId(projId);
+    localStorage.setItem('solarphase_installer_active_project_id', projId.toString());
+    toast.success('Loading installation checklist requirements...');
+    navigate('/dashboard/install');
+  };
+
+  // Simulation Helpers
+  const simulateQuoteRequest = () => {
+    const names = ['Emma Watson', 'Liam Neeson', 'Sophia Loren', 'Lucas Scott'];
+    const sizes = ['7.5 kW', '9.2 kW', '6.0 kW', '12.4 kW'];
+    const budgets = ['$15,000–$18,000', '$19,000–$23,000', '$12,000–$15,000', '$25,000–$30,000'];
+    const locations = ['San Jose, CA', 'San Francisco, CA', 'Berkeley, CA', 'San Mateo, CA'];
+    
+    const randomIdx = Math.floor(Math.random() * names.length);
+    const lead = db.addLead({
+      customer: names[randomIdx],
+      size: sizes[randomIdx],
+      location: locations[randomIdx],
+      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      budget: budgets[randomIdx]
+    });
+    
+    syncData();
+    toast.success(`Simulation: Homeowner ${lead.customer} requested a custom solar quote!`);
+  };
+
+  const simulateMaintenanceTicket = () => {
+    const names = ['Michael Chang', 'Sarah Connor', 'Peter Parker'];
+    const types = ['Inverter degradation', 'Panel cleaning', 'Wiring warning'];
+    const descriptions = [
+      'Inverter reporting 15% degraded daily efficiency. Diagnostics code E14.',
+      'Heavy debris and dust build-up on roof array.',
+      'System reporting ground fault alarm. Action required.'
+    ];
+    const priorities = ['Medium', 'Low', 'High'] as const;
+
+    const randomIdx = Math.floor(Math.random() * names.length);
+    db.addServiceRequest({
+      customer: names[randomIdx],
+      location: 'Bay Area, CA',
+      priority: priorities[randomIdx],
+      type: types[randomIdx],
+      notes: descriptions[randomIdx]
+    });
+    
+    syncData();
+    toast.success(`Simulation: Homeowner ${names[randomIdx]} submitted a new service request!`);
+  };
+
+  // Select project checklist
+  const selectedProject = projects.find(p => p.id === activeProjectId) || projects.find(p => p.status !== 'Active') || projects[0];
+
+  // Dynamic statistics graphs data
+  const revenueData = [
+    { month: 'Jan', revenue: 45000 },
+    { month: 'Feb', revenue: 62000 },
+    { month: 'Mar', revenue: 58000 },
+    { month: 'Apr', revenue: 79000 },
+    { month: 'May', revenue: 95000 },
+    { month: 'Jun', revenue: 110000 },
+  ];
+
+  const pipelineData = [
+    { stage: 'Survey', count: projects.filter(p => p.status === 'Site Survey').length },
+    { stage: 'Design', count: projects.filter(p => p.status === 'Design').length },
+    { stage: 'Permits', count: projects.filter(p => p.status === 'Permits').length },
+    { stage: 'Install', count: projects.filter(p => p.status === 'Installation').length },
+    { stage: 'Commission', count: projects.filter(p => p.status === 'Commissioning').length },
+    { stage: 'Active', count: projects.filter(p => p.status === 'Active').length }
+  ];
 
   // 1. VIEW: BUSINESS PROFILE
   if (view === 'profile') return (
@@ -187,9 +284,17 @@ export default function InstallerDashboard({ view }: { view: string }) {
   // 2. VIEW: LEADS
   if (view === 'leads') return (
     <div className="space-y-4 max-w-4xl">
-      <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-        <h2 className="font-bold text-lg mb-1">Receive Residential Leads</h2>
-        <p className="text-xs text-muted-foreground">Submit custom installation quotes to customer prospects looking to adopt solar panels.</p>
+      <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="font-bold text-lg mb-1">Receive Residential Leads</h2>
+          <p className="text-xs text-muted-foreground">Submit custom installation quotes to customer prospects looking to adopt solar panels.</p>
+        </div>
+        <button
+          onClick={simulateQuoteRequest}
+          className="flex items-center gap-1.5 px-4 py-2 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 rounded-xl text-xs font-semibold shadow-sm transition-colors"
+        >
+          <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Quote Request
+        </button>
       </div>
 
       <div className="space-y-3">
@@ -199,8 +304,8 @@ export default function InstallerDashboard({ view }: { view: string }) {
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
                   <p className="font-bold text-sm text-foreground">{lead.customer}</p>
-                  <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${lead.status === 'Pending' ? 'bg-yellow-500/10 text-yellow-600' : lead.status === 'Accepted' ? 'bg-accent/10 text-accent' : 'bg-destructive/10 text-destructive'}`}>
-                    {lead.status === 'Pending' ? 'Awaiting Quote' : lead.status === 'Accepted' ? 'Quoted' : 'Declined'}
+                  <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider ${lead.status === 'Pending' ? 'bg-yellow-500/10 text-yellow-600' : lead.status === 'Accepted' ? 'bg-accent/10 text-accent border border-accent/20' : 'bg-destructive/10 text-destructive'}`}>
+                    {lead.status === 'Pending' ? 'Awaiting Quote' : lead.status === 'Accepted' ? 'Quoted / Accepted' : 'Declined'}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">Desired system size: <span className="font-semibold text-primary">{lead.size}</span> · Location: {lead.location}</p>
@@ -213,7 +318,7 @@ export default function InstallerDashboard({ view }: { view: string }) {
                     <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-muted-foreground">$</span>
                     <input
                       type="number"
-                      placeholder="Enter Quote Amount"
+                      placeholder="Enter Bid Price"
                       value={bidPrices[lead.id] || ''}
                       onChange={e => setBidPrices(p => ({ ...p, [lead.id]: e.target.value }))}
                       className="w-40 pl-6 pr-3 py-2 text-xs rounded-xl bg-muted border border-border focus:outline-none focus:ring-1 focus:ring-primary"
@@ -237,9 +342,9 @@ export default function InstallerDashboard({ view }: { view: string }) {
               )}
 
               {lead.status === 'Accepted' && (
-                <div className="text-right">
-                  <span className="text-xs text-muted-foreground">My Quoted Price</span>
-                  <p className="font-bold text-sm text-primary">${parseInt(lead.quotePrice || '0').toLocaleString()}</p>
+                <div className="text-left sm:text-right">
+                  <span className="text-[10px] text-muted-foreground font-semibold block">Submitted Quote Price</span>
+                  <p className="font-black text-base text-primary mt-0.5">${parseInt(lead.quotePrice || '0').toLocaleString()}</p>
                 </div>
               )}
             </div>
@@ -249,8 +354,8 @@ export default function InstallerDashboard({ view }: { view: string }) {
         {leads.length === 0 && (
           <div className="bg-card border border-border rounded-2xl p-12 text-center shadow-sm">
             <Users className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
-            <p className="font-bold text-sm">No leads available</p>
-            <p className="text-xs text-muted-foreground mt-1">Check back later for homeowner quote requests.</p>
+            <p className="font-bold text-sm">No active homeowner leads</p>
+            <p className="text-xs text-muted-foreground mt-1">Click the "Simulate Quote Request" button to mock homeowner solicitations.</p>
           </div>
         )}
       </div>
@@ -273,7 +378,9 @@ export default function InstallerDashboard({ view }: { view: string }) {
                 <p className="font-bold text-foreground text-sm">{p.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Customer: {p.customer} · Target Commissioning Date: {p.date}</p>
               </div>
-              <span className="text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 px-2.5 py-1 rounded-full uppercase tracking-wider">
+              <span className={`text-[10px] font-bold border px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                p.status === 'Active' ? 'bg-accent/10 text-accent border-accent/20' : 'bg-primary/10 text-primary border-primary/20'
+              }`}>
                 {p.status}
               </span>
             </div>
@@ -290,18 +397,15 @@ export default function InstallerDashboard({ view }: { view: string }) {
 
             <div className="flex items-center gap-2 border-t border-border pt-4 justify-between">
               <button
-                onClick={() => {
-                  setActiveProjectId(p.id);
-                  toast.success(`Checklist loaded for ${p.name}. Mark checklist items to advance progress.`);
-                }}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-semibold"
+                onClick={() => handleLoadChecklist(p.id)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-muted hover:bg-muted/80 text-foreground border border-border rounded-lg text-xs font-semibold transition-colors"
               >
-                <Eye className="w-4 h-4" /> Load Checklist
+                <Eye className="w-4 h-4" /> Load Install Checklist
               </button>
               <button
                 onClick={() => handleUpdateProjectStage(p.id)}
                 disabled={p.status === 'Active'}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-semibold hover:bg-primary/90 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-xs font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors shadow-sm"
               >
                 <RefreshCw className="w-3.5 h-3.5" /> Advance Pipeline Stage
               </button>
@@ -348,7 +452,6 @@ export default function InstallerDashboard({ view }: { view: string }) {
             onClick={() => {
               if (selectedProject.checklist?.every(c => c.done)) {
                 toast.success('Solar installation verified! System commissioning has completed. Generating telemetry feeds.');
-                // Update project to Active
                 const updated = projects.map(p => p.id === selectedProject.id ? { ...p, status: 'Active' as const, completion: 100 } : p);
                 db.saveProjects(updated);
                 setProjects(updated);
@@ -374,9 +477,17 @@ export default function InstallerDashboard({ view }: { view: string }) {
   // 5. VIEW: MAINTENANCE
   if (view === 'maintenance') return (
     <div className="space-y-4 max-w-4xl">
-      <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-        <h2 className="font-bold text-lg mb-1">Maintenance Dispatches</h2>
-        <p className="text-xs text-muted-foreground">Assign technician engineers to customer service tickets.</p>
+      <div className="bg-card border border-border rounded-2xl p-6 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="font-bold text-lg mb-1">Maintenance Dispatches</h2>
+          <p className="text-xs text-muted-foreground">Assign technician engineers to customer service tickets.</p>
+        </div>
+        <button
+          onClick={simulateMaintenanceTicket}
+          className="flex items-center gap-1.5 px-4 py-2 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 rounded-xl text-xs font-semibold shadow-sm transition-colors"
+        >
+          <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Support Ticket
+        </button>
       </div>
 
       <div className="space-y-3">
@@ -385,7 +496,9 @@ export default function InstallerDashboard({ view }: { view: string }) {
             <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-sm text-foreground">{ticket.customer}</span>
-                <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${ticket.priority === 'High' ? 'bg-destructive/10 text-destructive' : ticket.priority === 'Medium' ? 'bg-yellow-500/10 text-yellow-600' : 'bg-muted text-muted-foreground'}`}>{ticket.priority} Priority</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
+                  ticket.priority === 'High' ? 'bg-destructive/10 text-destructive border-destructive/20' : ticket.priority === 'Medium' ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20' : 'bg-muted text-muted-foreground'
+                }`}>{ticket.priority} Priority</span>
               </div>
               <p className="text-xs font-semibold text-primary">{ticket.type}</p>
               <p className="text-xs text-muted-foreground leading-normal max-w-lg mt-1">{ticket.notes}</p>
@@ -393,7 +506,7 @@ export default function InstallerDashboard({ view }: { view: string }) {
             </div>
 
             <div className="flex items-center gap-3 border-t md:border-t-0 pt-3 md:pt-0 justify-between md:justify-end flex-shrink-0">
-              <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider ${ticket.status === 'Open' ? 'bg-secondary/10 text-secondary' : ticket.status === 'In Progress' ? 'bg-amber-500/10 text-amber-600' : 'bg-accent/10 text-accent'}`}>
+              <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase tracking-wider ${ticket.status === 'Open' ? 'bg-secondary/10 text-secondary' : ticket.status === 'In Progress' ? 'bg-amber-500/10 text-amber-600' : 'bg-accent/10 text-accent border border-accent/20'}`}>
                 {ticket.status}
               </span>
 
@@ -416,7 +529,7 @@ export default function InstallerDashboard({ view }: { view: string }) {
           <div className="bg-card border border-border rounded-2xl p-12 text-center shadow-sm">
             <Wrench className="w-10 h-10 text-muted-foreground mx-auto mb-4" />
             <p className="font-bold text-sm">No maintenance requests</p>
-            <p className="text-xs text-muted-foreground mt-1">Platform service systems report zero solar panel fault alarms.</p>
+            <p className="text-xs text-muted-foreground mt-1">Click the "Simulate Support Ticket" button to test technician dispatches.</p>
           </div>
         )}
       </div>
@@ -426,12 +539,13 @@ export default function InstallerDashboard({ view }: { view: string }) {
   // 6. DEFAULT VIEW: OVERVIEW
   return (
     <div className="space-y-6">
+      {/* Dynamic Statistics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         {[
           { label: 'Active Leads', value: `${leads.filter(l => l.status === 'Pending').length}`, icon: Users, color: 'text-primary', bg: 'bg-primary/10' },
           { label: 'Installation Pipeline', value: `${projects.filter(p => p.status !== 'Active').length}`, icon: FolderOpen, color: 'text-secondary', bg: 'bg-secondary/10' },
           { label: 'Completed Systems', value: `${projects.filter(p => p.status === 'Active').length}`, icon: CheckCircle, color: 'text-accent', bg: 'bg-accent/10' },
-          { label: 'Annual Revenue YTD', value: '$840,000', icon: DollarSign, color: 'text-primary', bg: 'bg-primary/10' },
+          { label: 'Annual Revenue YTD', value: `$${(840000 + projects.filter(p => p.status === 'Active').length * 15000).toLocaleString()}`, icon: DollarSign, color: 'text-primary', bg: 'bg-primary/10' },
         ].map((s, i) => (
           <div key={i} className="bg-card border border-border rounded-2xl p-6 shadow-sm">
             <div className={`w-10 h-10 rounded-xl ${s.bg} flex items-center justify-center mb-4`}><s.icon className={`w-5 h-5 ${s.color}`} /></div>
@@ -439,6 +553,92 @@ export default function InstallerDashboard({ view }: { view: string }) {
             <p className="text-2xl font-black text-foreground">{s.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* Interactive Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Side: Pipeline Breakdown Bar Chart */}
+        <div className="lg:col-span-1 bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <h3 className="font-semibold text-sm mb-4">Installation Pipeline Stages</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={pipelineData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="stage" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+              <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 11 }} />
+              <Bar dataKey="count" fill="#2563EB" radius={[4, 4, 0, 0]} name="Active Projects" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Right Side: Revenue growth area chart */}
+        <div className="lg:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <h3 className="font-semibold text-sm mb-4">Contractor Revenue Growth</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={revenueData}>
+              <defs>
+                <linearGradient id="installerRev" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#16A34A" stopOpacity={0.2} />
+                  <stop offset="95%" stopColor="#16A34A" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+              <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+              <YAxis tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+              <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 11 }} />
+              <Area type="monotone" dataKey="revenue" stroke="#16A34A" strokeWidth={2} fill="url(#installerRev)" name="Revenue ($)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Quick Action Project List Table */}
+      <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+        <h3 className="font-semibold text-sm mb-4">Active Projects Quick Summary</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr className="border-b border-border pb-2 text-muted-foreground font-semibold">
+                <th className="py-2">Project</th>
+                <th className="py-2">Client</th>
+                <th className="py-2">Progress</th>
+                <th className="py-2">Phase</th>
+                <th className="py-2 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {projects.map(p => (
+                <tr key={p.id} className="border-b border-border/50 last:border-0 hover:bg-muted/30 transition-colors">
+                  <td className="py-3 font-semibold text-foreground">{p.name}</td>
+                  <td className="py-3 text-muted-foreground">{p.customer}</td>
+                  <td className="py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-16 bg-muted rounded-full h-2 overflow-hidden">
+                        <div className="bg-primary h-2 rounded-full" style={{ width: `${p.completion}%` }} />
+                      </div>
+                      <span className="font-bold text-foreground">{p.completion}%</span>
+                    </div>
+                  </td>
+                  <td className="py-3">
+                    <span className={`px-2 py-0.5 rounded font-bold uppercase tracking-wider text-[9px] ${
+                      p.status === 'Active' ? 'bg-accent/10 text-accent border border-accent/20' : 'bg-primary/10 text-primary border border-primary/20'
+                    }`}>
+                      {p.status}
+                    </span>
+                  </td>
+                  <td className="py-3 text-right">
+                    <button
+                      onClick={() => handleLoadChecklist(p.id)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-muted hover:bg-muted/80 text-foreground border border-border rounded-lg text-[10px] font-bold transition-colors"
+                    >
+                      Checklist <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
