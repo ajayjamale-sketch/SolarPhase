@@ -123,7 +123,7 @@ export default function Navbar() {
                     <Link to="/dashboard" className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors">
                       <Zap className="w-4 h-4" /> Dashboard
                     </Link>
-                    <Link to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors">
+                    <Link to="/dashboard/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors">
                       <User className="w-4 h-4" /> Profile
                     </Link>
                     <Link to="/settings" className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors">
@@ -193,7 +193,7 @@ export default function Navbar() {
               {user ? (
                 <>
                   <Link to="/dashboard" className="px-4 py-3 rounded-lg text-sm font-medium hover:bg-muted">Dashboard</Link>
-                  <Link to="/profile" className="px-4 py-3 rounded-lg text-sm font-medium hover:bg-muted">Profile</Link>
+                  <Link to="/dashboard/profile" className="px-4 py-3 rounded-lg text-sm font-medium hover:bg-muted">Profile</Link>
                   <button onClick={handleLogout} className="px-4 py-3 rounded-lg text-sm font-medium text-destructive text-left hover:bg-destructive/10">Sign Out</button>
                 </>
               ) : (

@@ -7,10 +7,11 @@ import {
   Home, Building2, HardHat, Shield, BarChart3, ChevronRight,
   Battery, MapPin, Star, Cpu, Upload, FileText, Users,
   ClipboardList, AlertCircle, Check, ChevronDown, Search,
-  PlusCircle, Eye, RefreshCw, Download, ThumbsUp, ThumbsDown
+  PlusCircle, Eye, RefreshCw, Download, ThumbsUp, ThumbsDown,
+  Camera, Save
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { logoutUser } from '@/lib/auth';
+import { logoutUser, updateUserProfile } from '@/lib/auth';
 import { useTheme } from '@/hooks/useTheme';
 import { ChartSkeleton, CardSkeleton } from '@/components/features/Skeletons';
 import Breadcrumbs from '@/components/features/Breadcrumbs';
@@ -110,6 +111,55 @@ export default function Dashboard() {
   const { view: viewParam } = useParams<{ view?: string }>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [unreadCount, setUnreadCount] = useState(3);
+  const [notificationList, setNotificationList] = useState<Array<{ id: number; text: string; time: string; type: 'info' | 'warning' | 'success' }>>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    let list: Array<{ id: number; text: string; time: string; type: 'info' | 'warning' | 'success' }> = [];
+    if (user.role === 'Residential Customer') {
+      list = [
+        { id: 1, text: 'Inverter operating at degraded output (94%).', time: '10m ago', type: 'warning' },
+        { id: 2, text: 'Financing partner approved your loan application.', time: '2h ago', type: 'success' },
+        { id: 3, text: 'New quote proposal received from SunBuilders LLC.', time: '1d ago', type: 'info' },
+      ];
+    } else if (user.role === 'Commercial Business') {
+      list = [
+        { id: 1, text: 'AI demand offset: optimal shift opportunity at 2 PM today.', time: '5m ago', type: 'info' },
+        { id: 2, text: 'Rooftop engineering feasibility assessment signed.', time: '3h ago', type: 'success' },
+        { id: 3, text: 'Green energy subsidy compliance validation pending.', time: '1d ago', type: 'warning' },
+      ];
+    } else if (user.role === 'Solar Installer') {
+      list = [
+        { id: 1, text: 'New high-priority lead received for 6.0 kW system.', time: '1h ago', type: 'success' },
+        { id: 2, text: 'Technician Mike Torres submitted inspection checklist.', time: '4h ago', type: 'info' },
+        { id: 3, text: 'Warranty tracking registration confirmed for project #104.', time: '2d ago', type: 'info' },
+      ];
+    } else if (user.role === 'Maintenance Technician') {
+      list = [
+        { id: 1, text: 'Urgent inverter under-voltage request assigned to you.', time: '15m ago', type: 'warning' },
+        { id: 2, text: 'Work order approved for site safety inspection.', time: '1d ago', type: 'success' },
+      ];
+    } else if (user.role === 'Financing Partner') {
+      list = [
+        { id: 1, text: 'New FICO 720 loan application submitted by customer.', time: '1h ago', type: 'info' },
+        { id: 2, text: 'Monthly disbursement transfer of $45,800 executed.', time: '5h ago', type: 'success' },
+      ];
+    } else if (user.role === 'Enterprise Energy Manager') {
+      list = [
+        { id: 1, text: 'Outage Alert: Facility #3 (Boston Hub) reported 0% generation.', time: '3m ago', type: 'warning' },
+        { id: 2, text: 'ESG ESG target checklist reached 71% of yearly budget.', time: '2h ago', type: 'success' },
+      ];
+    } else if (user.role === 'Admin') {
+      list = [
+        { id: 1, text: 'EcoSun Contractors submitted new EPC registration request.', time: '30m ago', type: 'warning' },
+        { id: 2, text: 'Monthly SaaS subscription MRR increased to $80,240.', time: '1d ago', type: 'success' },
+      ];
+    }
+    setNotificationList(list);
+    setUnreadCount(list.length);
+  }, [user]);
 
   const activeView = viewParam || 'overview';
 
@@ -198,7 +248,7 @@ export default function Dashboard() {
               {user.isDemo && <span className="text-xs text-primary font-medium">Demo Mode</span>}
             </div>
           </div>
-          <Link to="/profile" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+          <Link to="/dashboard/profile" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${activeView === 'profile' ? 'bg-primary text-primary-foreground shadow-md font-semibold' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>
             <User className="w-4 h-4" /> Profile
           </Link>
           <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-destructive hover:bg-destructive/10 transition-colors font-medium">
@@ -231,10 +281,64 @@ export default function Dashboard() {
             <button onClick={toggleTheme} className="p-2 rounded-lg hover:bg-muted transition-colors">
               {theme === 'dark' ? <Sun className="w-5 h-5 text-primary" /> : <Moon className="w-5 h-5 text-muted-foreground" />}
             </button>
-            <button className="p-2 rounded-lg hover:bg-muted transition-colors relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full" />
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => setNotificationsOpen(!notificationsOpen)}
+                className="p-2 rounded-lg hover:bg-muted transition-colors relative"
+              >
+                <Bell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-destructive rounded-full" />
+                )}
+              </button>
+
+              {notificationsOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setNotificationsOpen(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-card border border-border rounded-xl shadow-xl py-3 z-50">
+                    <div className="px-4 pb-2 border-b border-border flex items-center justify-between">
+                      <span className="font-bold text-sm">Notifications</span>
+                      {unreadCount > 0 && (
+                        <button 
+                          onClick={() => {
+                            setUnreadCount(0);
+                            toast.success('Marked all as read.');
+                          }}
+                          className="text-[10px] text-primary hover:underline font-semibold"
+                        >
+                          Mark all as read
+                        </button>
+                      )}
+                    </div>
+                    <div className="max-h-72 overflow-y-auto mt-2">
+                      {notificationList.map(n => (
+                        <div 
+                          key={n.id} 
+                          className="px-4 py-2.5 hover:bg-muted/50 transition-colors flex gap-3 text-xs border-b border-border/40 last:border-0"
+                        >
+                          <div className="mt-0.5">
+                            {n.type === 'warning' ? (
+                              <AlertTriangle className="w-4 h-4 text-amber-500" />
+                            ) : n.type === 'success' ? (
+                              <CheckCircle className="w-4 h-4 text-accent" />
+                            ) : (
+                              <AlertCircle className="w-4 h-4 text-primary" />
+                            )}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-foreground font-medium">{n.text}</p>
+                            <span className="text-[10px] text-muted-foreground mt-0.5 block">{n.time}</span>
+                          </div>
+                        </div>
+                      ))}
+                      {notificationList.length === 0 && (
+                        <p className="text-xs text-muted-foreground italic text-center py-6">No new notifications.</p>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </header>
 
@@ -258,6 +362,8 @@ export default function Dashboard() {
             </div>
           ) : activeView === 'settings' ? (
             <DashboardSettings />
+          ) : activeView === 'profile' ? (
+            <DashboardProfile />
           ) : (
             <RoleDashboard role={user.role} view={activeView} />
           )}
@@ -391,6 +497,154 @@ function DashboardSettings() {
           {saving ? <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" /> : <CheckCircle className="w-4 h-4" />}
           {saving ? 'Saving...' : 'Save Settings'}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Inline Profile View ──────────────────────────────────────────────────────
+function DashboardProfile() {
+  const { user, updateUser } = useAuth();
+  const [form, setForm] = useState({ name: '', email: '', company: '', role: 'Residential Customer' as UserRole });
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  const ALL_ROLES: UserRole[] = [
+    'Residential Customer', 'Commercial Business', 'Solar Installer',
+    'Maintenance Technician', 'Financing Partner', 'Enterprise Energy Manager', 'Admin'
+  ];
+
+  useEffect(() => {
+    if (user) {
+      setForm({
+        name: user.name,
+        email: user.email,
+        company: user.company || '',
+        role: user.role
+      });
+    }
+  }, [user]);
+
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (form.name.trim().length < 2) e.name = 'Name must be at least 2 characters';
+    if (!form.email || !/^\S+@\S+\.\S+$/.test(form.email)) e.email = 'Valid email required';
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validate()) return;
+    setSavingProfile(true);
+    setTimeout(() => {
+      const updated = updateUserProfile(form);
+      updateUser(updated);
+      toast.success('Profile updated successfully.');
+      setSavingProfile(false);
+    }, 800);
+  };
+
+  const handleChange = (field: string, value: string) => {
+    setForm(prev => ({ ...prev, [field]: value }));
+    if (errors[field]) setErrors(prev => ({ ...prev, [field]: '' }));
+  };
+
+  if (!user) return null;
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-primary/10 via-accent/5 to-secondary/10 px-8 py-10 relative overflow-hidden border-b border-border">
+          <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-primary/5 blur-3xl" />
+          <div className="flex items-center gap-6 relative">
+            <div className="relative">
+              <div className="w-20 h-20 rounded-2xl bg-primary flex items-center justify-center shadow-xl">
+                <span className="text-3xl font-black text-primary-foreground">{user.name.charAt(0).toUpperCase()}</span>
+              </div>
+              <button className="absolute -bottom-1 -right-1 w-7 h-7 bg-card border border-border rounded-full flex items-center justify-center hover:bg-muted transition-colors shadow-sm">
+                <Camera className="w-3.5 h-3.5 text-muted-foreground" />
+              </button>
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold text-foreground">{user.name}</h2>
+              <p className="text-muted-foreground text-sm">{user.email}</p>
+              <span className="inline-block mt-2 text-xs bg-primary/25 border border-primary/30 text-primary px-3 py-1 rounded-full font-semibold">
+                {user.role}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSave} className="p-6 space-y-6">
+          <h3 className="text-lg font-bold text-foreground">Edit Account Profile</h3>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-sm">
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-2">Full Name</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={e => handleChange('name', e.target.value)}
+                className={`w-full px-4 py-3 rounded-xl bg-muted border ${errors.name ? 'border-destructive' : 'border-border'} focus:outline-none focus:ring-1 focus:ring-primary`}
+              />
+              {errors.name && <p className="text-destructive text-xs mt-1">{errors.name}</p>}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-2">Email Address</label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={e => handleChange('email', e.target.value)}
+                className={`w-full px-4 py-3 rounded-xl bg-muted border ${errors.email ? 'border-destructive' : 'border-border'} focus:outline-none focus:ring-1 focus:ring-primary`}
+              />
+              {errors.email && <p className="text-destructive text-xs mt-1">{errors.email}</p>}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-2">Company (Optional)</label>
+              <input
+                type="text"
+                value={form.company}
+                onChange={e => handleChange('company', e.target.value)}
+                placeholder="Your company name"
+                className="w-full px-4 py-3 rounded-xl bg-muted border border-border focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-muted-foreground mb-2">Account Type</label>
+              <select
+                value={form.role}
+                onChange={e => handleChange('role', e.target.value)}
+                disabled={user?.isDemo}
+                className="w-full px-4 py-3 rounded-xl bg-muted border border-border focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {ALL_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+              {user?.isDemo && <p className="text-[10px] text-muted-foreground mt-1">Role is read-only in demo mode.</p>}
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-border flex items-center justify-between">
+            <p className="text-xs text-muted-foreground">Member since {new Date(user.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}</p>
+            <button
+              type="submit"
+              disabled={savingProfile}
+              className="flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-md disabled:opacity-50 text-sm"
+            >
+              {savingProfile ? (
+                <div className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              {savingProfile ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

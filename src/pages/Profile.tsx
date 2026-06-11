@@ -22,11 +22,8 @@ export default function Profile() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    window.scrollTo(0, 0);
-    if (authLoading) return;
-    if (!isAuthenticated) { navigate('/login'); return; }
-    if (user) setForm({ name: user.name, email: user.email, company: user.company || '', role: user.role });
-  }, [isAuthenticated, authLoading, navigate, user]);
+    navigate('/dashboard/profile', { replace: true });
+  }, [navigate]);
 
   const validate = () => {
     const e: Record<string, string> = {};
