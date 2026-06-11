@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { Zap, Twitter, Linkedin, Github, Youtube, Mail } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
+import logoUrl from '@/assets/logo.jpg';
 
 const FOOTER_LINKS = {
   Product: [
@@ -48,7 +49,7 @@ export default function Footer() {
           <div className="lg:col-span-2">
             <Link to="/" className="flex items-center gap-2 mb-4">
               <img 
-                src="/logo.jpg" 
+                src={logoUrl} 
                 alt="SolarPhase Logo" 
                 className="w-10 h-10 rounded-lg object-contain shadow-sm group-hover:scale-105 transition-transform"
               />

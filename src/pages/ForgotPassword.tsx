@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Zap, ArrowLeft, Mail } from 'lucide-react';
 import { toast } from 'sonner';
+import logoUrl from '@/assets/logo.jpg';
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState('');
@@ -29,7 +30,7 @@ export default function ForgotPassword() {
     <div className="min-h-screen bg-background flex items-center justify-center p-8">
       <div className="w-full max-w-md">
         <Link to="/" className="flex items-center gap-2 mb-10">
-          <img src="/logo.jpg" alt="SolarPhase Logo" className="w-8 h-8 rounded-lg object-contain shadow-sm" />
+          <img src={logoUrl} alt="SolarPhase Logo" className="w-8 h-8 rounded-lg object-contain shadow-sm" />
           <span className="font-bold text-xl">Solar<span className="text-primary">Phase</span></span>
         </Link>
 

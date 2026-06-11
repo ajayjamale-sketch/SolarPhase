@@ -5,12 +5,14 @@ import { useTheme } from '@/hooks/useTheme';
 import { useAuth } from '@/hooks/useAuth';
 import { logoutUser } from '@/lib/auth';
 import { toast } from 'sonner';
+import logoUrl from '@/assets/logo.jpg';
 
 const NAV_LINKS = [
   { label: 'Features', href: '/features' },
   { label: 'Pricing', href: '/pricing' },
   { label: 'About', href: '/about' },
   { label: 'Blog', href: '/blog' },
+  { label: 'FAQ', href: '/faq' },
   { label: 'Contact', href: '/contact' },
 ];
 
@@ -56,7 +58,7 @@ export default function Navbar() {
           {/* Logo */}
           <Link to="/" className="flex items-center gap-2 group">
             <img 
-              src="/logo.jpg" 
+              src={logoUrl} 
               alt="SolarPhase Logo" 
               className="w-10 h-10 rounded-lg object-contain shadow-sm group-hover:scale-105 transition-transform"
             />

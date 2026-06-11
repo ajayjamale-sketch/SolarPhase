@@ -5,6 +5,7 @@ import { registerUser } from '@/lib/auth';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { UserRole } from '@/types';
+import logoUrl from '@/assets/logo.jpg';
 
 const ROLES: { role: UserRole; icon: React.ElementType; desc: string }[] = [
   { role: 'Residential Customer', icon: Home, desc: 'Homeowner going solar' },
@@ -60,7 +61,7 @@ export default function Register() {
         <div className="absolute bottom-1/4 left-1/4 w-48 h-48 rounded-full bg-accent/10 blur-3xl" />
         <div className="relative text-center max-w-sm">
           <div className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-2xl mx-auto mb-8 bg-white p-1">
-            <img src="/logo.jpg" alt="SolarPhase Logo" className="w-full h-full object-contain rounded-xl" />
+            <img src={logoUrl} alt="SolarPhase Logo" className="w-full h-full object-contain rounded-xl" />
           </div>
           <h2 className="text-3xl font-bold text-white mb-4">Join 12,400+ Solar Users</h2>
           <p className="text-slate-300 leading-relaxed mb-8">Get your AI-powered solar assessment, monitor your system in real-time, and track every dollar saved.</p>
@@ -81,7 +82,7 @@ export default function Register() {
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <div className="lg:hidden flex items-center gap-2 mb-8">
-            <img src="/logo.jpg" alt="SolarPhase Logo" className="w-8 h-8 rounded-lg object-contain shadow-sm" />
+            <img src={logoUrl} alt="SolarPhase Logo" className="w-8 h-8 rounded-lg object-contain shadow-sm" />
             <span className="font-bold text-xl">Solar<span className="text-primary">Phase</span></span>
           </div>
 

@@ -1,6 +1,7 @@
 import { useLocation, Link } from 'react-router-dom';
 import { useEffect } from 'react';
 import { Zap, Home, ArrowLeft } from 'lucide-react';
+import logoUrl from '@/assets/logo.jpg';
 
 export default function NotFound() {
   const location = useLocation();
@@ -17,7 +18,7 @@ export default function NotFound() {
 
       <div className="text-center relative max-w-lg">
         <div className="w-20 h-20 rounded-2xl flex items-center justify-center shadow-2xl mx-auto mb-8 animate-float bg-white p-1">
-          <img src="/logo.jpg" alt="SolarPhase Logo" className="w-full h-full object-contain rounded-xl" />
+          <img src={logoUrl} alt="SolarPhase Logo" className="w-full h-full object-contain rounded-xl" />
         </div>
 
         <h1 className="text-8xl font-black text-primary mb-4">404</h1>
