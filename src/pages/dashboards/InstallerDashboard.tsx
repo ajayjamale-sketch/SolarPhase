@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { db, Lead, Project, ServiceRequest } from '@/lib/dashboardStore';
 
 export default function InstallerDashboard({ view }: { view: string }) {
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, login } = useAuth();
   const navigate = useNavigate();
 
   // Shared synchronized states
@@ -35,6 +35,9 @@ export default function InstallerDashboard({ view }: { view: string }) {
     }
   });
 
+  const [isPending, setIsPending] = useState(false);
+  const companyName = user?.company || 'SunBuilders LLC';
+
   // Database Sync Helper
   const syncData = () => {
     setLeads(db.getLeads());
@@ -45,6 +48,104 @@ export default function InstallerDashboard({ view }: { view: string }) {
   useEffect(() => {
     syncData();
   }, [view]);
+
+  useEffect(() => {
+    const checkStatus = () => {
+      try {
+        const stored = localStorage.getItem('solarphase_admin_installers');
+        const list = stored ? JSON.parse(stored) : [];
+        const record = list.find((i: any) => i.name.toLowerCase() === companyName.toLowerCase());
+        setIsPending(record ? record.status === 'Pending' : false);
+      } catch {
+        setIsPending(false);
+      }
+    };
+    checkStatus();
+    window.addEventListener('solarphase_data_updated', checkStatus);
+    return () => window.removeEventListener('solarphase_data_updated', checkStatus);
+  }, [companyName]);
+
+  if (isPending && view !== 'profile') {
+    return (
+      <div className="max-w-3xl mx-auto space-y-6 text-left">
+        {/* Step-by-step progress stepper */}
+        <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <h2 className="font-bold text-lg mb-6 text-foreground flex items-center gap-2">
+            <HardHat className="w-5 h-5 text-amber-500 animate-bounce" /> Contractor Vetting Portal
+          </h2>
+          <div className="relative flex justify-between items-center max-w-xl mx-auto px-4">
+            {/* Background progress line */}
+            <div className="absolute top-1/2 left-0 right-0 h-1 bg-muted -translate-y-1/2 z-0" />
+            <div className="absolute top-1/2 left-0 w-2/3 h-1 bg-primary -translate-y-1/2 z-0 transition-all duration-500" />
+
+            {[
+              { label: 'Register Account', desc: 'Completed', active: true, done: true },
+              { label: 'License Audit', desc: 'Auto-verified', active: true, done: true },
+              { label: 'Admin Vetting', desc: 'In Review', active: true, done: false },
+              { label: 'Workspace Active', desc: 'Locked', active: false, done: false }
+            ].map((step, idx) => (
+              <div key={idx} className="relative z-10 flex flex-col items-center">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shadow-md border-2 transition-all ${
+                  step.done 
+                    ? 'bg-accent border-accent text-white' 
+                    : step.active 
+                      ? 'bg-primary border-primary text-primary-foreground animate-pulse animate-duration-1000' 
+                      : 'bg-muted border-border text-muted-foreground'
+                }`}>
+                  {step.done ? <Check className="w-4 h-4" /> : idx + 1}
+                </div>
+                <span className="text-[10px] font-bold text-foreground mt-2">{step.label}</span>
+                <span className="text-[9px] text-muted-foreground mt-0.5">{step.desc}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Detailed Application Vetting Card */}
+        <div className="bg-card border border-border rounded-2xl p-8 shadow-sm text-center max-w-xl mx-auto">
+          <div className="w-14 h-14 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-6">
+            <Clock className="w-7 h-7 text-amber-500 animate-spin" />
+          </div>
+          <h3 className="text-xl font-bold text-foreground mb-2">Application Under Admin Review</h3>
+          <p className="text-xs text-muted-foreground leading-relaxed max-w-sm mx-auto mb-6">
+            Thank you for registering <strong className="text-foreground">{companyName}</strong>. Our operations team is currently validating your municipal EPC bond credentials and contractor license (<code className="bg-muted px-1.5 py-0.5 rounded text-[10px]">{profile.license}</code>).
+          </p>
+
+          <div className="bg-muted/50 rounded-xl p-4 border border-border text-xs text-left space-y-2.5 max-w-md mx-auto">
+            <p className="font-bold text-foreground flex items-center gap-1.5"><Sparkles className="w-4 h-4 text-primary animate-pulse" /> Simulation Walkthrough & Quick Testing:</p>
+            <ol className="list-decimal pl-4 space-y-1.5 text-muted-foreground leading-relaxed">
+              <li>You simulated this installer signup on the <strong>Admin Dashboard</strong>.</li>
+              <li>To approve this request, click the profile user avatar and sign out.</li>
+              <li>Log back in as the <strong>Admin</strong> demo role.</li>
+              <li>Go to <strong>Manage Partners</strong> &gt; <strong>Installers</strong>.</li>
+              <li>Click <strong>Verify Credentials</strong> on the <strong>{companyName}</strong> request card and approve it.</li>
+              <li>Impersonate or log back in as this installer to view the workspace fully active!</li>
+            </ol>
+          </div>
+
+          <div className="mt-8 flex gap-4 justify-center">
+            <button 
+              onClick={() => navigate('/dashboard/profile')}
+              className="px-5 py-2.5 bg-muted hover:bg-muted/80 text-foreground border border-border rounded-xl text-xs font-semibold transition-colors"
+            >
+              Edit Business Profile
+            </button>
+            <button
+              onClick={() => {
+                login(null as any);
+                localStorage.removeItem('solarphase_user');
+                navigate('/login');
+                toast.info('Signed out. Log in as Admin to proceed.');
+              }}
+              className="px-5 py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 text-xs shadow-md transition-colors"
+            >
+              Sign Out & Verify as Admin
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Save profile credentials
   const saveProfile = () => {

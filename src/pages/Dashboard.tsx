@@ -111,55 +111,109 @@ export default function Dashboard() {
   const { view: viewParam } = useParams<{ view?: string }>();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  interface DashboardNotification {
+    id: number;
+    text: string;
+    time: string;
+    type: 'info' | 'warning' | 'success';
+    action?: {
+      type: 'view_partner';
+      targetId: number;
+    };
+  }
+
   const [unreadCount, setUnreadCount] = useState(3);
-  const [notificationList, setNotificationList] = useState<Array<{ id: number; text: string; time: string; type: 'info' | 'warning' | 'success' }>>([]);
+  const [notificationList, setNotificationList] = useState<DashboardNotification[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
-  useEffect(() => {
+  const syncNotifications = () => {
     if (!user) return;
-    let list: Array<{ id: number; text: string; time: string; type: 'info' | 'warning' | 'success' }> = [];
-    if (user.role === 'Residential Customer') {
-      list = [
-        { id: 1, text: 'Inverter operating at degraded output (94%).', time: '10m ago', type: 'warning' },
-        { id: 2, text: 'Financing partner approved your loan application.', time: '2h ago', type: 'success' },
-        { id: 3, text: 'New quote proposal received from SunBuilders LLC.', time: '1d ago', type: 'info' },
-      ];
-    } else if (user.role === 'Commercial Business') {
-      list = [
-        { id: 1, text: 'AI demand offset: optimal shift opportunity at 2 PM today.', time: '5m ago', type: 'info' },
-        { id: 2, text: 'Rooftop engineering feasibility assessment signed.', time: '3h ago', type: 'success' },
-        { id: 3, text: 'Green energy subsidy compliance validation pending.', time: '1d ago', type: 'warning' },
-      ];
-    } else if (user.role === 'Solar Installer') {
-      list = [
-        { id: 1, text: 'New high-priority lead received for 6.0 kW system.', time: '1h ago', type: 'success' },
-        { id: 2, text: 'Technician Mike Torres submitted inspection checklist.', time: '4h ago', type: 'info' },
-        { id: 3, text: 'Warranty tracking registration confirmed for project #104.', time: '2d ago', type: 'info' },
-      ];
-    } else if (user.role === 'Maintenance Technician') {
-      list = [
-        { id: 1, text: 'Urgent inverter under-voltage request assigned to you.', time: '15m ago', type: 'warning' },
-        { id: 2, text: 'Work order approved for site safety inspection.', time: '1d ago', type: 'success' },
-      ];
-    } else if (user.role === 'Financing Partner') {
-      list = [
-        { id: 1, text: 'New FICO 720 loan application submitted by customer.', time: '1h ago', type: 'info' },
-        { id: 2, text: 'Monthly disbursement transfer of $45,800 executed.', time: '5h ago', type: 'success' },
-      ];
-    } else if (user.role === 'Enterprise Energy Manager') {
-      list = [
-        { id: 1, text: 'Outage Alert: Facility #3 (Boston Hub) reported 0% generation.', time: '3m ago', type: 'warning' },
-        { id: 2, text: 'ESG ESG target checklist reached 71% of yearly budget.', time: '2h ago', type: 'success' },
-      ];
-    } else if (user.role === 'Admin') {
-      list = [
-        { id: 1, text: 'EcoSun Contractors submitted new EPC registration request.', time: '30m ago', type: 'warning' },
-        { id: 2, text: 'Monthly SaaS subscription MRR increased to $80,240.', time: '1d ago', type: 'success' },
-      ];
+    const key = `solarphase_notifications_${user.role}`;
+    let list: DashboardNotification[] = [];
+    try {
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        list = JSON.parse(stored);
+      } else {
+        // Seed default notifications
+        if (user.role === 'Residential Customer') {
+          list = [
+            { id: 1, text: 'Inverter operating at degraded output (94%).', time: '10m ago', type: 'warning' },
+            { id: 2, text: 'Financing partner approved your loan application.', time: '2h ago', type: 'success' },
+            { id: 3, text: 'New quote proposal received from SunBuilders LLC.', time: '1d ago', type: 'info' },
+          ];
+        } else if (user.role === 'Commercial Business') {
+          list = [
+            { id: 1, text: 'AI demand offset: optimal shift opportunity at 2 PM today.', time: '5m ago', type: 'info' },
+            { id: 2, text: 'Rooftop engineering feasibility assessment signed.', time: '3h ago', type: 'success' },
+            { id: 3, text: 'Green energy subsidy compliance validation pending.', time: '1d ago', type: 'warning' },
+          ];
+        } else if (user.role === 'Solar Installer') {
+          list = [
+            { id: 1, text: 'New high-priority lead received for 6.0 kW system.', time: '1h ago', type: 'success' },
+            { id: 2, text: 'Technician Mike Torres submitted inspection checklist.', time: '4h ago', type: 'info' },
+            { id: 3, text: 'Warranty tracking registration confirmed for project #104.', time: '2d ago', type: 'info' },
+          ];
+        } else if (user.role === 'Maintenance Technician') {
+          list = [
+            { id: 1, text: 'Urgent inverter under-voltage request assigned to you.', time: '15m ago', type: 'warning' },
+            { id: 2, text: 'Work order approved for site safety inspection.', time: '1d ago', type: 'success' },
+          ];
+        } else if (user.role === 'Financing Partner') {
+          list = [
+            { id: 1, text: 'New FICO 720 loan application submitted by customer.', time: '1h ago', type: 'info' },
+            { id: 2, text: 'Monthly disbursement transfer of $45,800 executed.', time: '5h ago', type: 'success' },
+          ];
+        } else if (user.role === 'Enterprise Energy Manager') {
+          list = [
+            { id: 1, text: 'Outage Alert: Facility #3 (Boston Hub) reported 0% generation.', time: '3m ago', type: 'warning' },
+            { id: 2, text: 'ESG ESG target checklist reached 71% of yearly budget.', time: '2h ago', type: 'success' },
+          ];
+        } else if (user.role === 'Admin') {
+          list = [
+            { id: 1, text: 'EcoSun Contractors submitted new EPC registration request.', time: '30m ago', type: 'warning' },
+            { id: 2, text: 'Monthly SaaS subscription MRR increased to $80,240.', time: '1d ago', type: 'success' },
+          ];
+        }
+        localStorage.setItem(key, JSON.stringify(list));
+      }
+    } catch {
+      // ignore
     }
     setNotificationList(list);
-    setUnreadCount(list.length);
+    setUnreadCount(list.filter(n => !(n as any).read).length || list.length);
+  };
+
+  useEffect(() => {
+    syncNotifications();
+    const handleSync = () => {
+      syncNotifications();
+    };
+    window.addEventListener('solarphase_data_updated', handleSync);
+    return () => {
+      window.removeEventListener('solarphase_data_updated', handleSync);
+    };
   }, [user]);
+
+  const handleNotificationClick = (n: DashboardNotification) => {
+    const key = `solarphase_notifications_${user.role}`;
+    
+    // Perform redirect actions
+    if (n.action) {
+      if (n.action.type === 'view_partner') {
+        localStorage.setItem('solarphase_highlight_partner', n.action.targetId.toString());
+        navigate_view('partners');
+        setNotificationsOpen(false);
+      }
+    }
+
+    // Filter out / mark read
+    const updated = notificationList.map(item => item.id === n.id ? { ...item, read: true } : item);
+    localStorage.setItem(key, JSON.stringify(updated));
+    setNotificationList(updated);
+    setUnreadCount(updated.filter(item => !(item as any).read).length);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
+  };
 
   const activeView = viewParam || 'overview';
 
@@ -301,7 +355,11 @@ export default function Dashboard() {
                       {unreadCount > 0 && (
                         <button 
                           onClick={() => {
+                            const cleared = notificationList.map(item => ({ ...item, read: true }));
+                            localStorage.setItem(`solarphase_notifications_${user.role}`, JSON.stringify(cleared));
+                            setNotificationList(cleared);
                             setUnreadCount(0);
+                            window.dispatchEvent(new Event('solarphase_data_updated'));
                             toast.success('Marked all as read.');
                           }}
                           className="text-[10px] text-primary hover:underline font-semibold"
@@ -314,21 +372,27 @@ export default function Dashboard() {
                       {notificationList.map(n => (
                         <div 
                           key={n.id} 
-                          className="px-4 py-2.5 hover:bg-muted/50 transition-colors flex gap-3 text-xs border-b border-border/40 last:border-0"
+                          onClick={() => handleNotificationClick(n)}
+                          className={`px-4 py-2.5 hover:bg-muted/50 transition-colors flex gap-3 text-xs border-b border-border/40 last:border-0 cursor-pointer text-left ${
+                            !(n as any).read ? 'bg-primary/5 font-semibold' : ''
+                          }`}
                         >
                           <div className="mt-0.5">
                             {n.type === 'warning' ? (
-                              <AlertTriangle className="w-4 h-4 text-amber-500" />
+                              <AlertTriangle className={`w-4 h-4 ${!(n as any).read ? 'text-amber-500 scale-110' : 'text-amber-500/75'}`} />
                             ) : n.type === 'success' ? (
-                              <CheckCircle className="w-4 h-4 text-accent" />
+                              <CheckCircle className={`w-4 h-4 ${!(n as any).read ? 'text-accent scale-110' : 'text-accent/75'}`} />
                             ) : (
-                              <AlertCircle className="w-4 h-4 text-primary" />
+                              <AlertCircle className={`w-4 h-4 ${!(n as any).read ? 'text-primary scale-110' : 'text-primary/75'}`} />
                             )}
                           </div>
                           <div className="flex-1">
-                            <p className="text-foreground font-medium">{n.text}</p>
+                            <p className={`text-foreground ${!(n as any).read ? 'font-bold' : 'font-medium'}`}>{n.text}</p>
                             <span className="text-[10px] text-muted-foreground mt-0.5 block">{n.time}</span>
                           </div>
+                          {!(n as any).read && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0 self-center animate-pulse" />
+                          )}
                         </div>
                       ))}
                       {notificationList.length === 0 && (

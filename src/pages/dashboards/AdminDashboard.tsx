@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react';
 import {
   Users, FolderOpen, Building2, DollarSign, Search, PlusCircle, X,
-  Shield, Check, UserPlus, Trash2, Power, TrendingUp, BarChart2, Eye, Sparkles, AlertCircle, CheckCircle
+  Shield, Check, UserPlus, Trash2, Power, TrendingUp, BarChart2, Eye, Sparkles, AlertCircle, CheckCircle,
+  ShieldAlert, Award, FileSpreadsheet
 } from 'lucide-react';
 import { AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import { toast } from 'sonner';
 import { db, AdminUser, Project } from '@/lib/dashboardStore';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function AdminDashboard({ view }: { view: string }) {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+
   // Shared synchronized states
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -21,6 +27,10 @@ export default function AdminDashboard({ view }: { view: string }) {
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [newUserForm, setNewUserForm] = useState({ name: '', email: '', role: 'Residential Customer' });
   const [auditProject, setAuditProject] = useState<Project | null>(null);
+
+  // Local state for highlighting & detailed vetting
+  const [highlightedPartnerId, setHighlightedPartnerId] = useState<number | null>(null);
+  const [vettingModalPartner, setVettingModalPartner] = useState<any | null>(null);
 
   // Persistent partner state databases
   const [installers, setInstallers] = useState(() => {
@@ -56,6 +66,31 @@ export default function AdminDashboard({ view }: { view: string }) {
   useEffect(() => {
     syncData();
   }, [view]);
+
+  // Vetting Highlight Hook
+  useEffect(() => {
+    if (view === 'partners') {
+      const highlightIdStr = localStorage.getItem('solarphase_highlight_partner');
+      if (highlightIdStr) {
+        const id = parseInt(highlightIdStr);
+        setHighlightedPartnerId(id);
+        setPartnerTab('Installers');
+        
+        // Find installer and open vetting modal
+        const partner = installers.find(i => i.id === id) || financiers.find(f => f.id === id);
+        if (partner) {
+          setVettingModalPartner(partner);
+        }
+
+        // Clear highlight state so it doesn't repeat
+        localStorage.removeItem('solarphase_highlight_partner');
+        // Clear after 4 seconds so the card stops flashing
+        setTimeout(() => {
+          setHighlightedPartnerId(null);
+        }, 4000);
+      }
+    }
+  }, [view, installers, financiers]);
 
   // Toggle user suspension
   const handleToggleUserStatus = (id: number) => {
@@ -108,7 +143,50 @@ export default function AdminDashboard({ view }: { view: string }) {
   // Verify Partner status & persist in DB
   const handleVerifyPartner = (id: number, type: 'installer' | 'financier') => {
     if (type === 'installer') {
-      const updated = installers.map(p => p.id === id ? { ...p, status: 'Active' } : p);
+      const updated = installers.map(p => {
+        if (p.id === id) {
+          const activePartner = { ...p, status: 'Active' };
+          
+          // Also check/create a corresponding real user account so they can log in
+          const registeredUsersKey = 'solarphase_users';
+          try {
+            const usersStr = localStorage.getItem(registeredUsersKey);
+            const usersList = usersStr ? JSON.parse(usersStr) : [];
+            const email = `${p.name.toLowerCase().replace(/\s+/g, '')}@solarphase.com`;
+            const existingUser = usersList.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
+            
+            if (!existingUser) {
+              const newInstallerUser = {
+                id: `user_installer_${Date.now()}`,
+                name: p.name,
+                email: email,
+                role: 'Solar Installer',
+                company: p.name,
+                createdAt: new Date().toISOString(),
+              };
+              usersList.push(newInstallerUser);
+              localStorage.setItem(registeredUsersKey, JSON.stringify(usersList));
+            }
+
+            // Also add a welcome notification to this Installer's notification list
+            const installerNotificationsKey = `solarphase_notifications_Solar Installer`;
+            const installerAlerts = [
+              {
+                id: Date.now(),
+                text: 'Welcome! Your contractor credentials have been verified by the administrator.',
+                time: 'Just now',
+                type: 'success'
+              }
+            ];
+            localStorage.setItem(installerNotificationsKey, JSON.stringify(installerAlerts));
+          } catch (e) {
+            console.error('Failed to provision installer user account', e);
+          }
+
+          return activePartner;
+        }
+        return p;
+      });
       setInstallers(updated);
       localStorage.setItem('solarphase_admin_installers', JSON.stringify(updated));
       toast.success('Solar contractor credentials verified and active.');
@@ -118,13 +196,41 @@ export default function AdminDashboard({ view }: { view: string }) {
       localStorage.setItem('solarphase_admin_financiers', JSON.stringify(updated));
       toast.success('Financing partner verified and active.');
     }
+    setVettingModalPartner(null);
+  };
+
+  // Impersonate Installer user
+  const handleImpersonatePartner = (partnerName: string) => {
+    const email = `${partnerName.toLowerCase().replace(/\s+/g, '')}@solarphase.com`;
+    const usersStr = localStorage.getItem('solarphase_users');
+    const usersList = usersStr ? JSON.parse(usersStr) : [];
+    let targetUser = usersList.find((u: any) => u.email.toLowerCase() === email.toLowerCase());
+
+    if (!targetUser) {
+      targetUser = {
+        id: `user_installer_${Date.now()}`,
+        name: partnerName,
+        email: email,
+        role: 'Solar Installer',
+        company: partnerName,
+        createdAt: new Date().toISOString(),
+      };
+      usersList.push(targetUser);
+      localStorage.setItem('solarphase_users', JSON.stringify(usersList));
+    }
+
+    login(targetUser);
+    toast.success(`Access Token Granted: Impersonating ${partnerName}`, {
+      description: `Logged in as ${email}. Redirecting to installer workspace...`
+    });
+    navigate('/dashboard');
   };
 
   // Simulate partner signup
   const simulatePartnerRegistration = () => {
     if (partnerTab === 'Installers') {
-      const names = ['Apex Solar EPC', 'VoltAir Energy', 'Bay Solar Tech'];
-      const locations = ['San Diego, CA', 'Seattle, WA', 'San Jose, CA'];
+      const names = ['Bay Solar Tech', 'Apex Solar EPC', 'VoltAir Energy'];
+      const locations = ['San Jose, CA', 'San Diego, CA', 'Seattle, WA'];
       const randomIdx = Math.floor(Math.random() * names.length);
       const newInst = {
         id: installers.length > 0 ? Math.max(...installers.map(i => i.id)) + 1 : 1,
@@ -133,9 +239,32 @@ export default function AdminDashboard({ view }: { view: string }) {
         status: 'Pending',
         projects: 0
       };
+      
       const updated = [...installers, newInst];
       setInstallers(updated);
       localStorage.setItem('solarphase_admin_installers', JSON.stringify(updated));
+      
+      // Inject alert to localStorage and notify parent Dashboard layout
+      const adminNotificationsKey = 'solarphase_notifications_Admin';
+      try {
+        const storedAlerts = localStorage.getItem(adminNotificationsKey);
+        const alertsList = storedAlerts ? JSON.parse(storedAlerts) : [];
+        alertsList.unshift({
+          id: Date.now(),
+          text: `Installer "${newInst.name}" submitted a registration request!`,
+          time: 'Just now',
+          type: 'warning',
+          action: {
+            type: 'view_partner',
+            targetId: newInst.id
+          }
+        });
+        localStorage.setItem(adminNotificationsKey, JSON.stringify(alertsList));
+      } catch (e) {
+        console.error('Failed to add simulation notification', e);
+      }
+      
+      window.dispatchEvent(new Event('solarphase_data_updated'));
       toast.success(`Simulation: Installer "${newInst.name}" submitted a registration request!`);
     } else {
       const names = ['Vanguard Green Funds', 'EcoEquity Partners', 'Horizon Lending Group'];
@@ -151,6 +280,27 @@ export default function AdminDashboard({ view }: { view: string }) {
       const updated = [...financiers, newFin];
       setFinanciers(updated);
       localStorage.setItem('solarphase_admin_financiers', JSON.stringify(updated));
+      
+      const adminNotificationsKey = 'solarphase_notifications_Admin';
+      try {
+        const storedAlerts = localStorage.getItem(adminNotificationsKey);
+        const alertsList = storedAlerts ? JSON.parse(storedAlerts) : [];
+        alertsList.unshift({
+          id: Date.now(),
+          text: `Financing Partner "${newFin.name}" submitted a registration request!`,
+          time: 'Just now',
+          type: 'warning',
+          action: {
+            type: 'view_partner',
+            targetId: newFin.id
+          }
+        });
+        localStorage.setItem(adminNotificationsKey, JSON.stringify(alertsList));
+      } catch (e) {
+        console.error('Failed to add simulation notification', e);
+      }
+
+      window.dispatchEvent(new Event('solarphase_data_updated'));
       toast.success(`Simulation: Financing Partner "${newFin.name}" submitted a registration request!`);
     }
   };
@@ -471,28 +621,116 @@ export default function AdminDashboard({ view }: { view: string }) {
       </div>
 
       <div className="space-y-3">
-        {(partnerTab === 'Installers' ? installers : financiers).map(p => (
-          <div key={p.id} className="bg-card border border-border rounded-2xl p-5 shadow-sm flex justify-between items-center gap-4">
-            <div>
-              <p className="font-bold text-sm text-foreground">{p.name}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Location: {p.location} · Active Accounts: {'projects' in p ? p.projects : p.loans}</p>
+        {(partnerTab === 'Installers' ? installers : financiers).map(p => {
+          const isHighlighted = p.id === highlightedPartnerId;
+          return (
+            <div 
+              key={p.id} 
+              className={`bg-card border rounded-2xl p-5 shadow-sm flex justify-between items-center gap-4 transition-all duration-500 ${
+                isHighlighted 
+                  ? 'border-amber-500 dark:border-primary ring-2 ring-amber-500/50 dark:ring-primary/50 bg-amber-500/5 dark:bg-primary/5 shadow-md animate-pulse-slow' 
+                  : 'border-border'
+              }`}
+            >
+              <div>
+                <p className="font-bold text-sm text-foreground flex items-center gap-2">
+                  {p.name}
+                  {isHighlighted && (
+                    <span className="text-[9px] bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200 border border-amber-300 dark:border-amber-800 px-2 py-0.5 rounded font-black uppercase tracking-wider animate-bounce">
+                      Selected Request
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">Location: {p.location} · Active Accounts: {'projects' in p ? p.projects : p.loans}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${p.status === 'Active' ? 'bg-accent/10 text-accent border border-accent/20' : 'bg-yellow-500/10 text-yellow-600 border border-yellow-500/20 animate-pulse'}`}>
+                  {p.status}
+                </span>
+                {p.status === 'Pending' && (
+                  <button
+                    onClick={() => setVettingModalPartner(p)}
+                    className="px-3 py-1.5 bg-accent text-white font-semibold rounded-lg text-xs hover:bg-accent/90 shadow-sm transition-colors"
+                  >
+                    Verify Credentials
+                  </button>
+                )}
+                {p.status === 'Active' && partnerTab === 'Installers' && (
+                  <button
+                    onClick={() => handleImpersonatePartner(p.name)}
+                    className="px-3 py-1.5 bg-secondary text-white font-semibold rounded-lg text-xs hover:bg-secondary/90 shadow-sm transition-colors flex items-center gap-1"
+                  >
+                    <Power className="w-3.5 h-3.5" /> Impersonate
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${p.status === 'Active' ? 'bg-accent/10 text-accent border border-accent/20' : 'bg-yellow-500/10 text-yellow-600 border border-yellow-500/20 animate-pulse'}`}>
-                {p.status}
-              </span>
-              {p.status === 'Pending' && (
-                <button
-                  onClick={() => handleVerifyPartner(p.id, partnerTab === 'Installers' ? 'installer' : 'financier')}
-                  className="px-3 py-1.5 bg-accent text-white font-semibold rounded-lg text-xs hover:bg-accent/90 shadow-sm transition-colors"
-                >
-                  Verify Credentials
-                </button>
-              )}
+          );
+        })}
+      </div>
+
+      {/* Credential Vetting Modal */}
+      {vettingModalPartner && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-md shadow-2xl p-6 text-left">
+            <div className="flex items-center justify-between pb-4 border-b border-border mb-4">
+              <h3 className="font-bold text-lg flex items-center gap-1.5 text-foreground">
+                <ShieldAlert className="w-5 h-5 text-amber-500" /> Vetting Application
+              </h3>
+              <button 
+                onClick={() => setVettingModalPartner(null)} 
+                className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="flex justify-between items-center py-2 border-b border-border/50">
+                <span className="text-muted-foreground font-semibold">Entity Name</span>
+                <span className="font-bold text-foreground">{vettingModalPartner.name}</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-border/50">
+                <span className="text-muted-foreground font-semibold">HQ Location</span>
+                <span className="font-semibold text-foreground">{vettingModalPartner.location}</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-border/50">
+                <span className="text-muted-foreground font-semibold">Vetting Status</span>
+                <span className="px-2 py-0.5 rounded font-bold uppercase tracking-wider text-[9px] bg-yellow-500/10 text-yellow-600 border border-yellow-500/20">
+                  {vettingModalPartner.status}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-border/50">
+                <span className="text-muted-foreground font-semibold">License Scope</span>
+                <span className="font-semibold text-foreground">Solar EPC & Electrical</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-border/50">
+                <span className="text-muted-foreground font-semibold">License Registration</span>
+                <span className="font-mono text-foreground font-bold">CA-SOL-{vettingModalPartner.id * 1000 + 492}</span>
+              </div>
+              <div className="flex justify-between items-center py-2 border-b border-border/50">
+                <span className="text-muted-foreground font-semibold">Auto-Audit Compliancy</span>
+                <span className="font-bold text-accent flex items-center gap-1"><Award className="w-3.5 h-3.5 text-accent" /> 100% Compliant</span>
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setVettingModalPartner(null)}
+                className="flex-1 py-2.5 bg-muted text-muted-foreground font-semibold rounded-xl hover:bg-muted/80 text-xs transition-colors border border-border"
+              >
+                Close Vetting
+              </button>
+              <button
+                onClick={() => handleVerifyPartner(vettingModalPartner.id, partnerTab === 'Installers' ? 'installer' : 'financier')}
+                className="flex-1 py-2.5 bg-accent text-white font-semibold rounded-xl hover:bg-accent/90 text-xs shadow-md transition-colors"
+              >
+                Approve & Activate
+              </button>
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
     </div>
   );
 
