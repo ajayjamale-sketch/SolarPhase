@@ -299,7 +299,7 @@ export default function Dashboard() {
             </div>
             <div className="min-w-0">
               <p className="text-sm font-medium truncate">{user.name}</p>
-              {user.isDemo && <span className="text-xs text-primary font-medium">Demo Mode</span>}
+              {user.isDemo && <span className="text-xs text-primary font-medium">Sandbox Mode</span>}
             </div>
           </div>
           <Link to="/dashboard/profile" className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${activeView === 'profile' ? 'bg-primary text-primary-foreground shadow-md font-semibold' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>
@@ -329,7 +329,7 @@ export default function Dashboard() {
           <div className="flex items-center gap-2">
             {user.isDemo && (
               <span className="hidden sm:flex items-center gap-1.5 text-xs font-semibold bg-secondary/10 text-secondary px-3 py-1.5 rounded-full border border-secondary/20">
-                <Zap className="w-3 h-3 animate-bounce" /> Demo Mode
+                <Zap className="w-3 h-3 animate-bounce" /> Sandbox Mode
               </span>
             )}
             <button onClick={toggleTheme} className="p-2 rounded-lg hover:bg-muted transition-colors">
@@ -689,7 +689,7 @@ function DashboardProfile() {
               >
                 {ALL_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
-              {user?.isDemo && <p className="text-[10px] text-muted-foreground mt-1">Role is read-only in demo mode.</p>}
+              {user?.isDemo && <p className="text-[10px] text-muted-foreground mt-1">Role is read-only in sandbox mode.</p>}
             </div>
           </div>
 

@@ -29,13 +29,24 @@ export function getStoredUsers(): User[] {
   }
 }
 
+export const ROLE_DETAILS: Record<UserRole, { name: string; email: string; company?: string }> = {
+  'Residential Customer': { name: 'Elena Morrison', email: 'elena@solarhome.com' },
+  'Commercial Business': { name: 'Carlos Reyes', email: 'carlos@solarcorp.com', company: 'SolarCorp' },
+  'Solar Installer': { name: 'James Okafor', email: 'james@brightgrid.com', company: 'BrightGrid Solar' },
+  'Maintenance Technician': { name: 'Sophie Laurent', email: 'sophie@techteam.io' },
+  'Financing Partner': { name: 'Priya Nair', email: 'priya@greenfinance.io' },
+  'Enterprise Energy Manager': { name: 'Marcus Wei', email: 'marcus@enterprise.com', company: 'GreenCorp Industries' },
+  'Admin': { name: 'Alex Vance', email: 'alex.vance@solarphase.com' },
+};
+
 export function loginAsDemo(role: UserRole): User {
+  const details = ROLE_DETAILS[role] || { name: 'Alex Vance', email: 'alex.vance@solarphase.com' };
   const demoUser: User = {
     id: `demo_${role.replace(/\s+/g, '_').toLowerCase()}`,
-    name: 'Demo User',
-    email: 'demo@solarphase.com',
+    name: details.name,
+    email: details.email,
     role,
-    company: role === 'Solar Installer' ? 'SunBuilders LLC' : role === 'Enterprise Energy Manager' ? 'GreenCorp Industries' : undefined,
+    company: details.company,
     createdAt: new Date().toISOString(),
     isDemo: true,
   };

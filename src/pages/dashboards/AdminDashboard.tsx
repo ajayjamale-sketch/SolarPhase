@@ -61,10 +61,20 @@ export default function AdminDashboard({ view }: { view: string }) {
   const syncData = () => {
     setUsers(db.getAdminUsers());
     setProjects(db.getProjects());
+    try {
+      const storedInstallers = localStorage.getItem('solarphase_admin_installers');
+      if (storedInstallers) setInstallers(JSON.parse(storedInstallers));
+      const storedFinanciers = localStorage.getItem('solarphase_admin_financiers');
+      if (storedFinanciers) setFinanciers(JSON.parse(storedFinanciers));
+    } catch (e) {
+      console.error('Failed to sync partner databases', e);
+    }
   };
 
   useEffect(() => {
     syncData();
+    window.addEventListener('solarphase_data_updated', syncData);
+    return () => window.removeEventListener('solarphase_data_updated', syncData);
   }, [view]);
 
   // Vetting Highlight Hook
@@ -106,6 +116,7 @@ export default function AdminDashboard({ view }: { view: string }) {
 
     db.saveAdminUsers(updated);
     setUsers(updated);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Delete user
@@ -118,6 +129,7 @@ export default function AdminDashboard({ view }: { view: string }) {
     db.saveAdminUsers(updated);
     setUsers(updated);
     toast.success(`User ${u.name} removed from registry.`);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Create new user account
@@ -138,6 +150,7 @@ export default function AdminDashboard({ view }: { view: string }) {
     setShowAddUserModal(false);
     setNewUserForm({ name: '', email: '', role: 'Residential Customer' });
     toast.success(`User account for ${created.name} provisioned.`);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Verify Partner status & persist in DB
@@ -197,6 +210,7 @@ export default function AdminDashboard({ view }: { view: string }) {
       toast.success('Financing partner verified and active.');
     }
     setVettingModalPartner(null);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Impersonate Installer user

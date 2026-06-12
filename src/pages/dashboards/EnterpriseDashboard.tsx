@@ -29,10 +29,16 @@ export default function EnterpriseDashboard({ view }: { view: string }) {
 
   const syncData = () => {
     setSites(db.getSites());
+    try {
+      const stored = localStorage.getItem('solarphase_enterprise_offline_sites');
+      setOfflineSites(stored ? JSON.parse(stored) : []);
+    } catch {}
   };
 
   useEffect(() => {
     syncData();
+    window.addEventListener('solarphase_data_updated', syncData);
+    return () => window.removeEventListener('solarphase_data_updated', syncData);
   }, [view]);
 
   // Add a new site location
@@ -54,6 +60,7 @@ export default function EnterpriseDashboard({ view }: { view: string }) {
     setShowAddSiteModal(false);
     setSiteForm({ name: '', generation: '120', consumption: '110', co2: '55' });
     toast.success(`Facility site ${newSite.name} registered. Redirecting to performance logs...`);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
     
     // Guided redirect
     setTimeout(() => {
@@ -79,6 +86,7 @@ export default function EnterpriseDashboard({ view }: { view: string }) {
     db.saveSites(updated);
     setSites(updated);
     toast.success('Facility automation controllers synchronized.');
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Download ESG corporate report
@@ -128,6 +136,7 @@ export default function EnterpriseDashboard({ view }: { view: string }) {
     setOfflineSites(updated);
     localStorage.setItem('solarphase_enterprise_offline_sites', JSON.stringify(updated));
     toast.error(`Grid Warning: Communication outage registered at "${targetSite.toUpperCase()}".`);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   const handleReconnectSite = (name: string) => {
@@ -135,12 +144,14 @@ export default function EnterpriseDashboard({ view }: { view: string }) {
     setOfflineSites(updated);
     localStorage.setItem('solarphase_enterprise_offline_sites', JSON.stringify(updated));
     toast.success(`Grid Alert: Restored connection to facility "${name.toUpperCase()}".`);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   const handleForceReconnectAll = () => {
     setOfflineSites([]);
     localStorage.setItem('solarphase_enterprise_offline_sites', JSON.stringify([]));
     toast.success('Emulating total corporate grid telemetry reconnect...');
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Dynamic calculations based on offline status and applied AI optimizations

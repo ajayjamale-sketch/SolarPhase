@@ -118,7 +118,7 @@ export default function Navbar() {
                       <p className="text-sm font-semibold">{user.name}</p>
                       <p className="text-xs text-muted-foreground truncate">{user.email}</p>
                       <p className="text-xs text-primary font-medium mt-0.5 truncate">{user.role}</p>
-                      {user.isDemo && <span className="text-xs bg-secondary/10 text-secondary px-2 py-0.5 rounded-full font-medium">Demo Mode</span>}
+                      {user.isDemo && <span className="text-xs bg-secondary/10 text-secondary px-2 py-0.5 rounded-full font-medium">Sandbox Mode</span>}
                     </div>
                     <Link to="/dashboard" className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors">
                       <Zap className="w-4 h-4" /> Dashboard

@@ -61,6 +61,8 @@ export default function CommercialDashboard({ view }: { view: string }) {
 
   useEffect(() => {
     syncData();
+    window.addEventListener('solarphase_data_updated', syncData);
+    return () => window.removeEventListener('solarphase_data_updated', syncData);
   }, [view, user?.company, user?.name]);
 
   const calcEMI = () => {
@@ -91,6 +93,7 @@ export default function CommercialDashboard({ view }: { view: string }) {
     setActiveLoan(app);
     setShowLoanModal(false);
     toast.success('Commercial solar financing application submitted to lenders.');
+    window.dispatchEvent(new Event('solarphase_data_updated'));
     navigate('/dashboard/financing');
   };
 
@@ -127,6 +130,7 @@ export default function CommercialDashboard({ view }: { view: string }) {
 
     syncData();
     toast.success(`Contract signed! EPC installers dispatched for ${siteName} Solar Installation.`);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   const applyReco = (index: number) => {
@@ -146,6 +150,7 @@ export default function CommercialDashboard({ view }: { view: string }) {
       }
     }
     toast.success('Optimization setpoints updated. AI load controller has shifted scheduling.');
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   const handleFileClaim = (index: number, name: string) => {
@@ -154,10 +159,12 @@ export default function CommercialDashboard({ view }: { view: string }) {
     setAppliedSubsidies(updated);
     localStorage.setItem('solarphase_applied_subsidies', JSON.stringify(updated));
     toast.info(`Filing subsidy claim for ${name}...`);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
     
     // Simulate verification after 1.5 seconds
     setTimeout(() => {
       toast.success(`Subsidy claim for ${name} has been verified and processed!`);
+      window.dispatchEvent(new Event('solarphase_data_updated'));
     }, 1500);
   };
 
@@ -168,6 +175,7 @@ export default function CommercialDashboard({ view }: { view: string }) {
     db.saveLoanApplications(updated);
     syncData();
     toast.success('Simulation: Financing Partner approved your commercial solar loan application!');
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   const simulateProjectAdvance = (projectId: number) => {
@@ -214,6 +222,7 @@ export default function CommercialDashboard({ view }: { view: string }) {
     db.saveProjects(updated);
     syncData();
     toast.success('Simulation: EPC installation progress advanced!');
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   const exportCSV = () => {
@@ -414,7 +423,7 @@ export default function CommercialDashboard({ view }: { view: string }) {
                   onClick={simulateLoanApproval}
                   className="flex items-center gap-1 text-xs text-primary hover:underline font-semibold"
                 >
-                  <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Loan Approval (Demo)
+                  <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Loan Approval (Sandbox)
                 </button>
               </div>
             )}
@@ -433,7 +442,7 @@ export default function CommercialDashboard({ view }: { view: string }) {
                 onClick={() => simulateProjectAdvance(siteProject.id)}
                 className="flex items-center gap-1.5 px-4 py-2.5 bg-primary/10 text-primary border border-primary/20 font-semibold rounded-xl hover:bg-primary/20 transition-colors text-xs shadow-sm"
               >
-                <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Construction Progress (Demo)
+                <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Construction Progress (Sandbox)
               </button>
             )}
 
@@ -619,7 +628,7 @@ export default function CommercialDashboard({ view }: { view: string }) {
                   onClick={simulateLoanApproval}
                   className="w-full flex items-center justify-center gap-1 py-2 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20 rounded-lg text-xs font-semibold transition-colors"
                 >
-                  <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Loan Approval (Demo)
+                  <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Loan Approval (Sandbox)
                 </button>
               )}
             </div>

@@ -4,7 +4,7 @@ import {
   Zap, Eye, EyeOff, ArrowRight, Users, Home, Building2,
   HardHat, Wrench, DollarSign, BarChart3, Shield, X, Phone, ChevronRight
 } from 'lucide-react';
-import { loginUser, loginAsDemo } from '@/lib/auth';
+import { loginUser, loginAsDemo, ROLE_DETAILS } from '@/lib/auth';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import { UserRole } from '@/types';
@@ -26,8 +26,8 @@ function RoleSelectModal({ onSelect, onClose }: { onSelect: (role: UserRole) => 
       <div className="bg-card border border-border rounded-2xl w-full max-w-2xl shadow-2xl">
         <div className="flex items-center justify-between p-6 border-b border-border">
           <div>
-            <h2 className="text-xl font-bold">Select Demo Role</h2>
-            <p className="text-sm text-muted-foreground mt-1">Choose a user type to explore their dashboard</p>
+            <h2 className="text-xl font-bold">Select User Profile</h2>
+            <p className="text-sm text-muted-foreground mt-1">Choose a profile to explore the corresponding dashboard</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted transition-colors">
             <X className="w-5 h-5" />
@@ -43,9 +43,10 @@ function RoleSelectModal({ onSelect, onClose }: { onSelect: (role: UserRole) => 
               <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center flex-shrink-0 group-hover:bg-primary/10 transition-colors">
                 <Icon className={`w-5 h-5 ${color}`} />
               </div>
-              <div className="min-w-0">
-                <p className="font-medium text-sm">{role}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-sm text-foreground">{ROLE_DETAILS[role]?.name}</p>
+                <p className="text-[11px] text-primary font-medium mt-0.5">{role}</p>
+                <p className="text-xs text-muted-foreground mt-1 leading-snug">{desc}</p>
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
             </button>
@@ -99,17 +100,17 @@ export default function Login() {
       return;
     }
     setOtpForm(p => ({ ...p, otpSent: true }));
-    toast.success('OTP sent! Use 123456 for demo access.');
+    toast.success('OTP sent! Use 123456 for profile access.');
   };
 
   const handleOTPLogin = () => {
     if (otpForm.otp !== '123456') {
-      toast.error('Invalid OTP. Use 123456 for demo.');
+      toast.error('Invalid OTP. Use 123456 for profile access.');
       return;
     }
     setLoading(true);
     setTimeout(() => {
-      const user = loginUser(`user_${otpForm.phone}@solarphase.demo`, 'demo123456');
+      const user = loginUser(`user_${otpForm.phone}@solarphase.com`, 'password123');
       login(user);
       toast.success('Logged in via OTP successfully!');
       navigate('/dashboard');
@@ -123,7 +124,7 @@ export default function Login() {
     setTimeout(() => {
       const user = loginAsDemo(role);
       login(user);
-      toast.success(`Logged in as Demo ${role}`, { description: 'Demo mode active – all actions use mock data.' });
+      toast.success(`Logged in as ${user.name}`, { description: `${role} profile active – all actions use mock data.` });
       navigate('/dashboard');
       setLoading(false);
     }, 600);
@@ -257,7 +258,7 @@ export default function Login() {
                     type="text"
                     value={otpForm.otp}
                     onChange={e => setOtpForm(p => ({ ...p, otp: e.target.value }))}
-                    placeholder="Enter 6-digit OTP (demo: 123456)"
+                    placeholder="Enter 6-digit OTP (123456)"
                     maxLength={6}
                     className="w-full px-4 py-3 rounded-xl bg-muted border border-border focus:outline-none focus:ring-2 focus:ring-primary tracking-widest text-center text-lg font-bold"
                   />
@@ -281,9 +282,9 @@ export default function Login() {
               className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-secondary/10 text-secondary border border-secondary/30 font-semibold rounded-xl hover:bg-secondary/20 transition-all text-base"
             >
               <Users className="w-5 h-5" />
-              Skip Credentials – Demo Access
+              Explore Dashboard Profiles
             </button>
-            <p className="text-center text-xs text-muted-foreground mt-2">Choose any of 7 user roles to explore the platform</p>
+            <p className="text-center text-xs text-muted-foreground mt-2">Choose any of 7 user profiles to explore the platform</p>
           </div>
 
           <p className="text-center text-muted-foreground mt-6 text-sm">

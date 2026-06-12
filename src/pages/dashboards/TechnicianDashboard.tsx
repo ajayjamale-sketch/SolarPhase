@@ -48,6 +48,8 @@ export default function TechnicianDashboard({ view }: { view: string }) {
 
   useEffect(() => {
     syncData();
+    window.addEventListener('solarphase_data_updated', syncData);
+    return () => window.removeEventListener('solarphase_data_updated', syncData);
   }, [view]);
 
   const activeTicket = tickets.find(t => t.id === selectedTicketId) || tickets.find(t => t.technician === user?.name && t.status === 'In Progress') || tickets[0];
@@ -71,6 +73,7 @@ export default function TechnicianDashboard({ view }: { view: string }) {
     setSelectedTicketId(id);
     localStorage.setItem('solarphase_tech_selected_ticket_id', id.toString());
     toast.success(`Service request ticket #${id} accepted. Redirecting to inspect systems...`);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
     
     // Guided redirect
     setTimeout(() => {
@@ -104,6 +107,7 @@ export default function TechnicianDashboard({ view }: { view: string }) {
     db.saveServiceRequests(updated);
     setTickets(updated);
     toast.success('Inspection telemetry uploaded! Redirecting to Perform Maintenance...');
+    window.dispatchEvent(new Event('solarphase_data_updated'));
     
     // Guided redirect
     setTimeout(() => {
@@ -127,6 +131,7 @@ export default function TechnicianDashboard({ view }: { view: string }) {
 
     db.saveServiceRequests(updated);
     setTickets(updated);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Complete maintenance
@@ -147,6 +152,7 @@ export default function TechnicianDashboard({ view }: { view: string }) {
     db.saveServiceRequests(updated);
     setTickets(updated);
     toast.success(`Ticket #${activeTicket.id} completed! Redirecting to Update Reports...`);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
     
     // Guided redirect
     setTimeout(() => {

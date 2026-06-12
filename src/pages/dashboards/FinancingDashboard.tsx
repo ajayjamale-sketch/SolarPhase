@@ -22,6 +22,8 @@ export default function FinancingDashboard({ view }: { view: string }) {
 
   useEffect(() => {
     syncData();
+    window.addEventListener('solarphase_data_updated', syncData);
+    return () => window.removeEventListener('solarphase_data_updated', syncData);
   }, [view]);
 
   // Approve loan and auto-redirect
@@ -37,6 +39,7 @@ export default function FinancingDashboard({ view }: { view: string }) {
     db.saveLoanApplications(updated);
     setApplications(updated);
     toast.success(`Loan application #${id} approved! Redirecting to Approved facilities...`);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
     
     // Guided redirect
     setTimeout(() => {
@@ -57,6 +60,7 @@ export default function FinancingDashboard({ view }: { view: string }) {
     db.saveLoanApplications(updated);
     setApplications(updated);
     toast.info(`Loan application #${id} declined.`);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Simulation Helper for new loan requests
@@ -78,6 +82,7 @@ export default function FinancingDashboard({ view }: { view: string }) {
 
     syncData();
     toast.success(`Simulation: New credit application submitted by ${app.applicant} for $${app.amount.toLocaleString()}!`);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Download financing report file

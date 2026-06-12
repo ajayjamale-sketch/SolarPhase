@@ -38,28 +38,36 @@ export default function ResidentialDashboard({ view }: { view: string }) {
   // Sync data on load and on view change
   useEffect(() => {
     if (!email) return;
-    setAssessment(db.getAssessmentForUser(email));
+    const syncData = () => {
+      setAssessment(db.getAssessmentForUser(email));
 
-    // Get leads for this customer (mock match by matching name or checking all leads)
-    const allLeads = db.getLeads();
-    // In our mock DB, let's filter for leads submitted by this customer
-    const userLeads = allLeads.filter(l => l.customer === user?.name);
-    setLeads(userLeads);
+      // Get leads for this customer (mock match by matching name or checking all leads)
+      const allLeads = db.getLeads();
+      // In our mock DB, let's filter for leads submitted by this customer
+      const userLeads = allLeads.filter(l => l.customer === user?.name);
+      setLeads(userLeads);
 
-    // Get active project
-    const allProjects = db.getProjects();
-    const userProj = allProjects.find(p => p.customer === user?.name);
-    setActiveProject(userProj || null);
+      // Get active project
+      const allProjects = db.getProjects();
+      const userProj = allProjects.find(p => p.customer === user?.name);
+      setActiveProject(userProj || null);
 
-    // Get active loan application
-    const allLoans = db.getLoanApplications();
-    const userLoan = allLoans.find(l => l.applicant === user?.name);
-    setActiveLoan(userLoan || null);
+      // Get active loan application
+      const allLoans = db.getLoanApplications();
+      const userLoan = allLoans.find(l => l.applicant === user?.name);
+      setActiveLoan(userLoan || null);
 
-    // Get service requests
-    const allReqs = db.getServiceRequests();
-    const userReqs = allReqs.filter(r => r.customer === user?.name);
-    setServiceRequests(userReqs);
+      // Get service requests
+      const allReqs = db.getServiceRequests();
+      const userReqs = allReqs.filter(r => r.customer === user?.name);
+      setServiceRequests(userReqs);
+    };
+
+    syncData();
+    window.addEventListener('solarphase_data_updated', syncData);
+    return () => {
+      window.removeEventListener('solarphase_data_updated', syncData);
+    };
   }, [email, view, user?.name]);
 
   // Assessment Calculator
@@ -93,6 +101,7 @@ export default function ResidentialDashboard({ view }: { view: string }) {
       setAssessment(newAssess);
       setAssessLoading(false);
       toast.success('AI Solar assessment complete! System configurations loaded.');
+      window.dispatchEvent(new Event('solarphase_data_updated'));
     }, 1200);
   };
 
@@ -112,6 +121,7 @@ export default function ResidentialDashboard({ view }: { view: string }) {
     // Add to local state
     setLeads(prev => [...prev, lead]);
     toast.success(`Quote request sent to ${installerName}. Installers will review it shortly!`);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Accept quote and trigger financing popup
@@ -141,6 +151,8 @@ export default function ResidentialDashboard({ view }: { view: string }) {
     setActiveLoan(app);
     setShowLoanModal(false);
     toast.success('Financing application submitted successfully. Lenders are reviewing your application.');
+    window.dispatchEvent(new Event('solarphase_data_updated'));
+    navigate('/dashboard/install');
   };
 
   // Accept Finance Option and Kick Off Project Installation
@@ -168,6 +180,7 @@ export default function ResidentialDashboard({ view }: { view: string }) {
 
     setActiveProject(proj);
     toast.success('Contract signed! Installation scheduled. EPC installers have been dispatched.');
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Submit maintenance request
@@ -190,6 +203,7 @@ export default function ResidentialDashboard({ view }: { view: string }) {
     setShowMaintModal(false);
     setMaintenanceForm({ type: 'Panel Cleaning', priority: 'Low', notes: '' });
     toast.success('Maintenance ticket submitted. Service dispatch is assigning a technician.');
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Simulation Helpers
@@ -199,6 +213,7 @@ export default function ResidentialDashboard({ view }: { view: string }) {
     db.saveLeads(updated);
     setLeads(updated.filter(l => l.customer === user?.name));
     toast.success('Simulation: Contractor SunBuilders LLC accepted lead and offered $14,200!');
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   const simulateLoanApproval = () => {
@@ -208,6 +223,7 @@ export default function ResidentialDashboard({ view }: { view: string }) {
     const myLoan = updated.find(l => l.applicant === user?.name);
     setActiveLoan(myLoan || null);
     toast.success('Simulation: Financing Partner approved your solar loan application!');
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   const simulateProjectAdvance = () => {
@@ -235,6 +251,7 @@ export default function ResidentialDashboard({ view }: { view: string }) {
     const myProj = updated.find(p => p.customer === user?.name);
     setActiveProject(myProj || null);
     toast.success(`Simulation: EPC installer advanced construction stage to "${nextStatus}"!`);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   const simulateTechnicianComplete = () => {
@@ -244,6 +261,7 @@ export default function ResidentialDashboard({ view }: { view: string }) {
     setServiceRequests(updated.filter(r => r.customer === user?.name));
     setFaultAlert(false);
     toast.success('Simulation: Technician Mike Torres completed service. Health restored!');
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // 1. VIEW: ASSESSMENT
@@ -437,18 +455,27 @@ export default function ResidentialDashboard({ view }: { view: string }) {
                       onClick={() => simulateInstallerBid(activeLead.id)}
                       className="text-[10px] text-primary hover:underline font-semibold flex items-center gap-1"
                     >
-                      <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Contractor Bid (Demo)
+                      <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Contractor Bid (Sandbox)
                     </button>
                   </div>
                 )}
 
                 {activeLead && activeLead.status === 'Accepted' && (
-                  <button
-                    onClick={() => handleAcceptQuote(activeLead.id, activeLead.quotePrice || '15000')}
-                    className="px-4 py-2.5 bg-accent text-white font-semibold rounded-xl hover:bg-accent/90 transition-colors text-sm shadow-sm flex items-center gap-1"
-                  >
-                    <CreditCard className="w-4 h-4" /> Finance Offer
-                  </button>
+                  activeLoan ? (
+                    <button
+                      onClick={() => navigate('/dashboard/install')}
+                      className="px-4 py-2.5 bg-primary/15 text-primary border border-primary/20 hover:bg-primary/20 font-semibold rounded-xl transition-all text-sm shadow-sm flex items-center gap-1"
+                    >
+                      Track Installation <ChevronRight className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleAcceptQuote(activeLead.id, activeLead.quotePrice || '15000')}
+                      className="px-4 py-2.5 bg-accent text-white font-semibold rounded-xl hover:bg-accent/90 transition-colors text-sm shadow-sm flex items-center gap-1"
+                    >
+                      <CreditCard className="w-4 h-4" /> Finance Offer
+                    </button>
+                  )
                 )}
 
                 {activeLead && activeLead.status === 'Declined' && (
@@ -533,13 +560,13 @@ export default function ResidentialDashboard({ view }: { view: string }) {
                 onClick={simulateLoanApproval}
                 className="flex items-center gap-1 text-xs text-primary hover:underline font-semibold"
               >
-                <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Lender Loan Approval (Demo)
+                <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Lender Loan Approval (Sandbox)
               </button>
             </div>
           ) : (
             <button
-              onClick={() => toast.info('Please go to the "Request Quotes" tab to request quotes and apply.')}
-              className="px-6 py-2.5 bg-muted text-foreground border border-border hover:bg-muted/80 rounded-xl text-sm font-semibold"
+              onClick={() => navigate('/dashboard/quotes')}
+              className="px-6 py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 text-sm shadow-md transition-colors"
             >
               View Quotes Directory
             </button>
@@ -577,7 +604,7 @@ export default function ResidentialDashboard({ view }: { view: string }) {
               onClick={simulateProjectAdvance}
               className="mt-5 w-full flex items-center justify-center gap-1.5 px-4 py-2.5 bg-primary/10 text-primary border border-primary/20 font-semibold rounded-xl hover:bg-primary/20 transition-colors text-xs shadow-sm"
             >
-              <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Installation Progress (Demo)
+              <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Installation Progress (Sandbox)
             </button>
           )}
         </div>
@@ -606,7 +633,7 @@ export default function ResidentialDashboard({ view }: { view: string }) {
               onClick={simulateTechnicianComplete}
               className="px-3 py-1.5 bg-accent text-white font-semibold rounded-lg text-xs hover:bg-accent/90 transition-colors flex items-center gap-1 shadow-sm"
             >
-              <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Repair (Demo)
+              <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Simulate Repair (Sandbox)
             </button>
             <button onClick={() => setFaultAlert(false)} className="p-1.5 rounded-lg hover:bg-muted"><X className="w-4 h-4" /></button>
           </div>

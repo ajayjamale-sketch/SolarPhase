@@ -47,6 +47,8 @@ export default function InstallerDashboard({ view }: { view: string }) {
 
   useEffect(() => {
     syncData();
+    window.addEventListener('solarphase_data_updated', syncData);
+    return () => window.removeEventListener('solarphase_data_updated', syncData);
   }, [view]);
 
   useEffect(() => {
@@ -116,7 +118,7 @@ export default function InstallerDashboard({ view }: { view: string }) {
             <ol className="list-decimal pl-4 space-y-1.5 text-muted-foreground leading-relaxed">
               <li>You simulated this installer signup on the <strong>Admin Dashboard</strong>.</li>
               <li>To approve this request, click the profile user avatar and sign out.</li>
-              <li>Log back in as the <strong>Admin</strong> demo role.</li>
+              <li>Log back in as the <strong>Alex Vance (Admin)</strong> profile.</li>
               <li>Go to <strong>Manage Partners</strong> &gt; <strong>Installers</strong>.</li>
               <li>Click <strong>Verify Credentials</strong> on the <strong>{companyName}</strong> request card and approve it.</li>
               <li>Impersonate or log back in as this installer to view the workspace fully active!</li>
@@ -173,8 +175,9 @@ export default function InstallerDashboard({ view }: { view: string }) {
     setLeads(updatedLeads.filter(l => l.status === 'Pending' || l.status === 'Accepted'));
     toast.success(`Bid submitted: $${parseInt(priceStr).toLocaleString()} sent to customer!`);
     
-    // Auto sync dashboard state
+    // Auto sync dashboard state and notify siblings
     syncData();
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Decline lead
@@ -190,6 +193,7 @@ export default function InstallerDashboard({ view }: { view: string }) {
     setLeads(updatedLeads);
     toast.info('Lead proposal declined.');
     syncData();
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Increment project status
@@ -219,6 +223,7 @@ export default function InstallerDashboard({ view }: { view: string }) {
     db.saveProjects(updated);
     setProjects(updated);
     toast.success(`Project stage advanced to "${nextStatus}".`);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Toggle checklist checkbox
@@ -244,6 +249,7 @@ export default function InstallerDashboard({ view }: { view: string }) {
 
     db.saveProjects(updated);
     setProjects(updated);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Assign Technician to Maintenance request
@@ -265,6 +271,7 @@ export default function InstallerDashboard({ view }: { view: string }) {
     setMaintenanceTickets(updated);
     toast.success(`Technician ${techName} assigned to service call ticket #${ticketId}.`);
     syncData();
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Direct redirection to installation checklist
@@ -293,6 +300,7 @@ export default function InstallerDashboard({ view }: { view: string }) {
     
     syncData();
     toast.success(`Simulation: Homeowner ${lead.customer} requested a custom solar quote!`);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   const simulateMaintenanceTicket = () => {
@@ -316,6 +324,7 @@ export default function InstallerDashboard({ view }: { view: string }) {
     
     syncData();
     toast.success(`Simulation: Homeowner ${names[randomIdx]} submitted a new service request!`);
+    window.dispatchEvent(new Event('solarphase_data_updated'));
   };
 
   // Select project checklist
@@ -560,6 +569,7 @@ export default function InstallerDashboard({ view }: { view: string }) {
                 const updated = projects.map(p => p.id === selectedProject.id ? { ...p, status: 'Active' as const, completion: 100 } : p);
                 db.saveProjects(updated);
                 setProjects(updated);
+                window.dispatchEvent(new Event('solarphase_data_updated'));
               } else {
                 toast.error('All installation checklist compliance parameters must be checked.');
               }

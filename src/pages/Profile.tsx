@@ -131,7 +131,7 @@ export default function Profile() {
                 >
                   {ALL_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
-                {user?.isDemo && <p className="text-xs text-muted-foreground mt-1">Role is read-only in demo mode.</p>}
+                {user?.isDemo && <p className="text-xs text-muted-foreground mt-1">Role is read-only in sandbox mode.</p>}
               </div>
             </div>
 
